@@ -76,6 +76,8 @@ Item {
 
     MouseArea {
       anchors.fill: parent
+      acceptedButtons: Qt.LeftButton
+      preventStealing: true
       hoverEnabled: true
       onClicked: root.activated()
       onEntered: parent.opacity = 0.9
