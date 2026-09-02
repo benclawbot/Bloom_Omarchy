@@ -237,6 +237,12 @@ Item {
                     font.family: Style.font.family
                     font.pixelSize: 19
                   }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: if (service) service.toggleBloomActive()
+                  }
                 }
 
                 Column {
@@ -457,53 +463,6 @@ Item {
                   }
 
                   Rectangle {
-                    id: centralActiveToggle
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.verticalCenterOffset: -18
-                    width: 236
-                    height: 54
-                    radius: 27
-                    z: 4
-                    color: service && service.bloomActive
-                      ? root.accent
-                      : "#182230"
-                    border.width: 1
-                    border.color: service && service.bloomActive
-                      ? Qt.lighter(root.accent, 1.16)
-                      : "#526074"
-
-                    Row {
-                      anchors.centerIn: parent
-                      spacing: 10
-
-                      Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 12
-                        height: 12
-                        radius: 6
-                        color: service && service.bloomActive ? "#0C1119" : "#7D899B"
-                      }
-
-                      Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: service && service.bloomActive ? "BLOOM ACTIVE" : "ACTIVATE BLOOM"
-                        color: service && service.bloomActive ? "#0C1119" : "#E8EDF4"
-                        font.family: Style.font.family
-                        font.pixelSize: 11
-                        font.bold: true
-                        font.letterSpacing: 1.25
-                      }
-                    }
-
-                    MouseArea {
-                      anchors.fill: parent
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: if (service) service.toggleBloomActive()
-                    }
-                  }
-
-                  Rectangle {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
@@ -713,6 +672,46 @@ Item {
                       }
                     }
                   }
+                }
+              }
+
+              Rectangle {
+                id: centralActiveToggle
+                anchors.centerIn: parent
+                width: 236
+                height: 54
+                radius: 27
+                z: 8
+                color: service && service.bloomActive ? root.accent : "#182230"
+                border.width: 1
+                border.color: service && service.bloomActive
+                  ? Qt.lighter(root.accent, 1.16) : "#526074"
+
+                Row {
+                  anchors.centerIn: parent
+                  spacing: 10
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 12
+                    height: 12
+                    radius: 6
+                    color: service && service.bloomActive ? "#0C1119" : "#7D899B"
+                  }
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: service && service.bloomActive ? "BLOOM ACTIVE" : "ACTIVATE BLOOM"
+                    color: service && service.bloomActive ? "#0C1119" : "#E8EDF4"
+                    font.family: Style.font.family
+                    font.pixelSize: 11
+                    font.bold: true
+                    font.letterSpacing: 1.25
+                  }
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: if (service) service.toggleBloomActive()
                 }
               }
 
