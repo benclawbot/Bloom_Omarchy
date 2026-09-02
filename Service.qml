@@ -45,6 +45,7 @@ Item {
   property bool startupOpenHandled: false
   property bool configLoaded: false
   property bool rescanQueued: false
+  property double lastActiveToggleAt: 0
   property int revision: 0
 
   readonly property var currentScene: Scenes.get(currentSceneId)
@@ -165,6 +166,9 @@ Item {
   }
 
   function toggleBloomActive() {
+    var now = Date.now()
+    if (now - root.lastActiveToggleAt < 280) return root.bloomActive
+    root.lastActiveToggleAt = now
     return root.setBloomActive(!root.bloomActive)
   }
 
