@@ -212,15 +212,12 @@ def snapshot_clients() -> list[dict[str, Any]]:
             pid = int(client.get("pid", 0))
         except (TypeError, ValueError):
             continue
-        # Ignore special/internal windows and windows without a normal workspace.
         if workspace_id <= 0 or not address:
             continue
         window_class = str(client.get("class", ""))
         initial_class = str(client.get("initialClass", ""))
         executable = process_executable(pid)
         desktop_id = find_desktop_id(window_class, initial_class, executable)
-        # A client with no stable relaunch identity is still recorded for geometry,
-        # but it will never be launched automatically.
         saved.append(
             {
                 "order": index,
@@ -368,8 +365,6 @@ def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
             dispatch("resizewindowpixel", f"exact {size[0]} {size[1]},{selector}")
         dispatch("movewindowpixel", f"exact {at[0]} {at[1]},{selector}")
     elif size[0] > 0 and size[1] > 0:
-        # For tiled windows this asks the active layout to reproduce the saved
-        # split proportions. Hyprland may clamp impossible dimensions.
         dispatch("resizewindowpixel", f"exact {size[0]} {size[1]},{selector}")
 
     try:
@@ -377,7 +372,7 @@ def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
     except (TypeError, ValueError):
         fullscreen = 0
     if fullscreen:
-        dispatch("fullscreenstate", f"{fullscreen} {fullscreen}", selector)
+        dispatch("fullscreenstate", f"{fullscreen} {fullscreen},{selector}")
 
 
 def restore() -> bool:
@@ -437,6 +432,11 @@ def snapshot_due() -> bool:
 
 def auto() -> None:
     if not restore_enabled():
+        # FRESH is non-destructive: skip restore and preserve the saved session.
+        # Mark this boot so turning SAVE back on cannot resurrect the old setup
+        # in the middle of a running desktop.
+        if not already_restored_this_boot():
+            mark_restored_this_boot()
         print("fresh")
         return
     if not already_restored_this_boot():
@@ -444,7 +444,6 @@ def auto() -> None:
         # restore, a second bar instance must not start a launch storm.
         mark_restored_this_boot()
         restore()
-        # Capture the resulting desktop only after restoration was attempted.
         snapshot()
     elif snapshot_due():
         snapshot()
