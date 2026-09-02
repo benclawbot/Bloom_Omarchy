@@ -80,18 +80,20 @@ Bloom targets the Omarchy Quattro plugin API.
 omarchy plugin add https://github.com/benclawbot/Bloom_Omarchy.git --enable
 ~~~
 
-If Bloom is already installed, update the existing checkout instead of adding
-the same plugin ID again:
+If Bloom is already installed, update it in place. `--yes` avoids Omarchy's
+interactive diff confirmation and the updater rescans plugins automatically:
 
 ~~~bash
-omarchy plugin update org.bloom.omarchy
+omarchy plugin update org.bloom.omarchy --yes
 ~~~
 
-`--enable` enables the plugin and Bloom's manifest declares the right bar
-section, so the Bloom glyph should appear immediately. On a genuinely fresh
-install, Bloom reveals the canvas once automatically so the feature is
-discoverable; that one-time reveal does not enable future startup launches.
-After that, click the glyph whenever you want to open Bloom. If you are
+`--enable` enables the plugin and Bloom starts shaping workspaces immediately.
+The manifest declares the right bar section, where Bloom appears with a visible
+ON/OFF control. Click the ✦ glyph to open the canvas; its large central button
+also activates or pauses Bloom. No terminal command is part of normal use. On
+a genuinely fresh install, Bloom reveals the canvas once automatically so the
+feature is discoverable; that one-time reveal does not enable future startup
+launches. After that, click the glyph whenever you want to open Bloom. If you are
 scripting a non-interactive install, append --yes to accept Omarchy's plugin
 safety prompt.
 
@@ -114,12 +116,14 @@ process/file APIs described below.
 
 ## How Bloom launches
 
-Enabling the plugin loads Bloom's lightweight service with omarchy-shell.
-After the first-run reveal, the full canvas stays out of the way until you
-click the Bloom bar glyph or run either of these commands:
+Enabling the plugin loads Bloom's lightweight service with omarchy-shell and
+turns workspace atmospheres on by default. After the first-run reveal, the
+full canvas stays out of the way until you click the Bloom bar glyph. The
+large control in the center of the Scenes screen toggles Bloom on and off.
+
+For troubleshooting only, the equivalent direct shell command is:
 
 ~~~bash
-bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl open
 omarchy-shell shell summon org.bloom.omarchy '{"view":"scenes"}'
 ~~~
 
