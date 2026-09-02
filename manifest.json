@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "org.bloom.omarchy",
+  "name": "Bloom",
+  "version": "0.1.0",
+  "author": "Bloom for Omarchy",
+  "description": "A cinematic scene switcher and live Agent Constellation for Omarchy Quattro.",
+  "license": "MIT",
+  "kinds": [
+    "bar-widget",
+    "overlay",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "overlay": "Overlay.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Bloom",
+    "description": "Open the Bloom living workspace canvas.",
+    "category": "Workspace",
+    "defaultSection": "right",
+    "allowMultiple": false,
+    "defaults": {
+      "glyph": "✦"
+    },
+    "schema": [
+      {
+        "key": "glyph",
+        "label": "Glyph",
+        "type": "string",
+        "default": "✦"
+      }
+    ]
+  }
+}

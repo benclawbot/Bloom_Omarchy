@@ -1,0 +1,2 @@
+{"id":"fixture-codex","provider":"codex","project":"bloom","branch":"main","status":"working","summary":"Building the constellation","detail":"Fixture event for parser tests","progress":0.68,"updatedAt":1710000000000}
+{"id":"fixture-claude","provider":"claude","project":"atlas","branch":"review","status":"attention","summary":"A diff is ready","detail":"Fixture attention state","progress":0.94,"attention":true,"updatedAt":1710000001000}

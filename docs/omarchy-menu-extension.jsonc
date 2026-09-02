@@ -1,0 +1,20 @@
+{
+  "watchChanges": true,
+  "items": [
+    {
+      "label": "Bloom",
+      "icon": "sparkles",
+      "action": "bloomctl open"
+    },
+    {
+      "label": "Bloom · Agent Constellation",
+      "icon": "orbit",
+      "action": "bloomctl constellation"
+    },
+    {
+      "label": "Bloom · Next Scene",
+      "icon": "sun",
+      "action": "bloomctl next-scene"
+    }
+  ]
+}

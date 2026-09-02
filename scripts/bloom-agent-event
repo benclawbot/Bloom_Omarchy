@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: bloom-agent-event '<json-object>'" >&2
+  exit 64
+fi
+
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-bloom"
+mkdir -p "$runtime_dir"
+printf '%s\n' "$1" >> "$runtime_dir/agent-events.jsonl"

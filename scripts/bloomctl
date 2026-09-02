@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target="org.bloom.omarchy"
+command="${1:-open}"
+shift || true
+
+case "$command" in
+  open|scenes)
+    omarchy-shell shell summon "$target" '{"view":"scenes"}'
+    ;;
+  constellation|agents)
+    omarchy-shell shell summon "$target" '{"view":"constellation"}'
+    ;;
+  wallpapers)
+    omarchy-shell shell summon "$target" '{"view":"wallpapers"}'
+    ;;
+  scene)
+    [ "$#" -eq 1 ] || { echo "usage: bloomctl scene <forge|hush|library|afterglow|orbit>" >&2; exit 64; }
+    omarchy-shell bloom scene "$1"
+    ;;
+  next-scene)
+    omarchy-shell bloom nextScene
+    ;;
+  previous-scene)
+    omarchy-shell bloom previousScene
+    ;;
+  next-wallpaper)
+    omarchy-shell bloom nextWallpaper
+    ;;
+  refresh)
+    omarchy-shell bloom refresh
+    ;;
+  demo)
+    omarchy-shell bloom demo "${1:-}"
+    ;;
+  startup)
+    omarchy-shell bloom startup "${1:-}"
+    ;;
+  focus)
+    [ "$#" -eq 1 ] || { echo "usage: bloomctl focus <agent-id>" >&2; exit 64; }
+    omarchy-shell bloom focus "$1"
+    ;;
+  *)
+    echo "unknown Bloom command: $command" >&2
+    exit 64
+    ;;
+esac

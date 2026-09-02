@@ -1,0 +1,7 @@
+{
+  "id": "forge",
+  "name": "Forge",
+  "eyebrow": "BUILD",
+  "accent": "#F3A45D",
+  "defaultWallpapers": ["forge-emberline.webp", "forge-nightshift.webp"]
+}

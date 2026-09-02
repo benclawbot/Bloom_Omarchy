@@ -1,0 +1,7 @@
+{
+  "id": "library",
+  "name": "Library",
+  "eyebrow": "RESEARCH",
+  "accent": "#E8C773",
+  "defaultWallpapers": ["library-quietstacks.webp", "library-goldleaf.webp"]
+}

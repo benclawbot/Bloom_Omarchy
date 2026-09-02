@@ -1,0 +1,7 @@
+*.swp
+*.tmp
+.DS_Store
+Thumbs.db
+__pycache__/
+.pytest_cache/
+docs/assets/bloom-launch.mp4
