@@ -80,6 +80,13 @@ Bloom targets the Omarchy Quattro plugin API.
 omarchy plugin add https://github.com/benclawbot/Bloom_Omarchy.git --enable
 ~~~
 
+If Bloom is already installed, update the existing checkout instead of adding
+the same plugin ID again:
+
+~~~bash
+omarchy plugin update org.bloom.omarchy
+~~~
+
 `--enable` enables the plugin and Bloom's manifest declares the right bar
 section, so the Bloom glyph should appear immediately. On a genuinely fresh
 install, Bloom reveals the canvas once automatically so the feature is
@@ -112,7 +119,7 @@ After the first-run reveal, the full canvas stays out of the way until you
 click the Bloom bar glyph or run either of these commands:
 
 ~~~bash
-bloomctl open
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl open
 omarchy-shell shell summon org.bloom.omarchy '{"view":"scenes"}'
 ~~~
 
@@ -187,20 +194,19 @@ The optional scripts/bloomctl wrapper maps friendly commands to Omarchy shell
 IPC:
 
 ~~~bash
-bloomctl open
-bloomctl constellation
-bloomctl scene forge
-bloomctl next-scene
-bloomctl next-wallpaper
-bloomctl demo true
-bloomctl active off
-bloomctl active status
-bloomctl startup on
-bloomctl startup status
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl open
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl constellation
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl scene forge
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl next-scene
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl next-wallpaper
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl active off
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl active status
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl startup on
+bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl startup status
 ~~~
 
-Copy or symlink it into a directory on your PATH if you want to use it from
-keybindings or menu actions. Use `bloomctl startup off` to disable the
+Copy or symlink it into a directory on your PATH if you want the shorter
+`bloomctl` command for keybindings or menu actions. Use `bloomctl startup off` to disable the
 automatic canvas launch, or `bloomctl active off` to pause Bloom's
 workspace atmospheres. The Signal rail shows the same two toggles.
 
