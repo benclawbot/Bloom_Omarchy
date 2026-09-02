@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Apply a Bloom workspace wallpaper without mutating Omarchy's global
+# ~/.config/omarchy/current/background symlink. Bloom re-applies the saved
+# image whenever the focused workspace changes.
+
+if [[ $# -ne 1 || -z ${1:-} ]]; then
+  echo "Usage: bloom-workspace-bg <path-to-image>" >&2
+  exit 2
+fi
+
+BACKGROUND="$(realpath -- "$1")"
+if [[ ! -f "$BACKGROUND" ]]; then
+  echo "File does not exist: $BACKGROUND" >&2
+  exit 1
+fi
+
+case "${BACKGROUND,,}" in
+  *.png|*.jpg|*.jpeg|*.webp|*.avif) ;;
+  *)
+    echo "Unsupported wallpaper type: $BACKGROUND" >&2
+    exit 1
+    ;;
+esac
+
+# Match Omarchy's renderer, but point swaybg directly at Bloom's selected
+# image. This intentionally leaves Omarchy's persistent background symlink
+# untouched, so workspace-specific choices cannot overwrite one another.
+pkill -x swaybg 2>/dev/null || true
+setsid uwsm-app -- swaybg -i "$BACKGROUND" -m fill >/dev/null 2>&1 &

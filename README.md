@@ -132,21 +132,23 @@ modal by itself; click the bar glyph when you want the canvas. The preference
 is stored in `XDG_CONFIG_HOME/omarchy-bloom/config.json`; Bloom does not create
 a second startup process or modify your compositor configuration.
 
-Bloom also scopes atmosphere to the focused Hyprland workspace. Selecting a
-scene or wallpaper while you are on workspace 2 changes workspace 2's
-assignment; switching to workspace 1–5 restores that workspace's saved
-assignment. The desktop wallpaper is committed through Omarchy's own
-background setter, so it remains after Bloom closes.
+Bloom scopes atmosphere to the focused Hyprland workspace. Selecting a scene
+or wallpaper while you are on workspace 2 changes only workspace 2's saved
+assignment; switching away and back restores that workspace's image. Omarchy's
+stock background setter is intentionally not used for Bloom workspace choices,
+because it owns one global background symlink. Bloom instead starts `swaybg`
+directly with the focused workspace's saved image and leaves Omarchy's global
+background preference untouched.
 
 ## Controls
 
 | Key / action | Result |
 | --- | --- |
 | Click Bloom glyph | Open or close the Bloom canvas |
-| Open at login toggle | Open the scene canvas after Omarchy starts |
+| SAVE / FRESH | Restore the last desktop setup on next boot, or start fresh |
 | 1 … 5 | Jump to Forge, Hush, Library, Afterglow, or Orbit |
 | Left / Right | Previous or next scene |
-| N | Next wallpaper |
+| N | Next wallpaper for the current workspace |
 | A | Agent Constellation view |
 | W | Wallpaper view |
 | S | Scenes view |
@@ -154,7 +156,7 @@ background setter, so it remains after Bloom closes.
 | Up / Down | Select an agent |
 | Enter | Focus the selected live agent window |
 | Esc | Close Bloom |
-| Right-click glyph | Next wallpaper |
+| Right-click glyph | Next wallpaper for the current workspace |
 | Middle-click glyph | Next scene |
 | Demo pill | Populate a reviewable constellation |
 
@@ -174,9 +176,20 @@ XDG_CONFIG_HOME/omarchy-bloom/wallpapers/forge/
 XDG_CONFIG_HOME/omarchy-bloom/wallpapers/orbit/
 ~~~
 
-Bloom accepts png, jpg, jpeg, webp, and avif. A wallpaper inside a
-scene folder is preferred for that scene; a wallpaper at the root is treated
-as a neutral fallback.
+Bloom accepts png, jpg, jpeg, webp, and avif. A wallpaper inside a scene folder
+is preferred for that scene; a wallpaper at the root is treated as a neutral
+fallback. Open Bloom's Wallpapers view and cycle/select from the local library
+while focused on the workspace you want to customize. That choice is stored on
+the workspace itself, so using the same scene on another workspace does not
+inherit or overwrite it.
+
+The helper `scripts/bloom-workspace-bg` validates the selected file and changes
+the live `swaybg` image without changing Omarchy's `current/background`
+symlink. On a single-monitor setup this gives each workspace its own remembered
+wallpaper as you switch between them. Because `swaybg` is monitor-scoped rather
+than Hyprland-workspace-scoped, a multi-monitor desktop cannot show independent
+wallpapers for two simultaneously visible workspaces with one global swaybg
+process; Bloom still preserves and restores each workspace's own saved choice.
 
 ## Agent events
 
@@ -209,9 +222,9 @@ bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl startup status
 ~~~
 
 Copy or symlink it into a directory on your PATH if you want the shorter
-`bloomctl` command for keybindings or menu actions. Use `bloomctl startup off` to disable the
-automatic canvas launch, or `bloomctl active off` to pause Bloom's
-workspace atmospheres. The Signal rail shows the same two toggles.
+`bloomctl` command for keybindings or menu actions. Use `bloomctl startup off`
+to disable the automatic canvas launch, or `bloomctl active off` to pause
+Bloom's workspace atmospheres. The Signal rail shows the same two toggles.
 
 ## Omarchy menu extension
 
@@ -231,7 +244,7 @@ models/                       Pure scene, agent, and wallpaper logic
 assets/wallpapers/default/    Bundled GPT Image 2.0 scene wallpapers
 scenes/                       Human-readable scene metadata
 schemas/                      Agent event schema
-scripts/                      CLI and event bridge helpers
+scripts/                      Session, wallpaper, CLI, and event helpers
 docs/OMARCHY_BLOOM_SPEC.md   Full product and technical specification
 test/validate.py              Runtime-independent validation
 ~~~
