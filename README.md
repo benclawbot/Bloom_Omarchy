@@ -127,11 +127,10 @@ For troubleshooting only, the equivalent direct shell command is:
 omarchy-shell shell summon org.bloom.omarchy '{"view":"scenes"}'
 ~~~
 
-Inside the canvas, the **Open at login** switch lives in the right-hand Signal
-rail. Turn it on once and Bloom will open the scene canvas shortly after
-Omarchy starts. The preference is stored in
-`XDG_CONFIG_HOME/omarchy-bloom/config.json`; it does not create a second
-startup process or modify your compositor configuration.
+Bloom stays loaded and active in the background after login. It never opens a
+modal by itself; click the bar glyph when you want the canvas. The preference
+is stored in `XDG_CONFIG_HOME/omarchy-bloom/config.json`; Bloom does not create
+a second startup process or modify your compositor configuration.
 
 Bloom also scopes atmosphere to the focused Hyprland workspace. Selecting a
 scene or wallpaper while you are on workspace 2 changes workspace 2's
