@@ -79,7 +79,11 @@ Item {
       acceptedButtons: Qt.LeftButton
       preventStealing: true
       hoverEnabled: true
-      onClicked: root.activated()
+      onPressed: function(mouse) { mouse.accepted = true }
+      onClicked: function(mouse) {
+        mouse.accepted = true
+        root.activated()
+      }
       onEntered: parent.opacity = 0.9
       onExited: parent.opacity = 1
     }
