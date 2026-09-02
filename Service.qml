@@ -26,6 +26,7 @@ Item {
   readonly property string eventFile: runtimeHome + "/omarchy-bloom/agent-events.jsonl"
 
   property var sceneList: Scenes.all()
+  readonly property var workspaceSceneIds: ["forge", "hush", "library", "afterglow", "orbit"]
   property string currentSceneId: "forge"
   property string currentWorkspaceId: "1"
   property var sceneWallpaper: ({})
@@ -102,7 +103,7 @@ Item {
     }
 
     root.wallpapers = combined
-    root.syncFocusedWorkspace(true)
+    root.syncFocusedWorkspace(false)
     root.revision++
   }
 
@@ -170,6 +171,10 @@ Item {
   function setScene(id) {
     var nextId = String(id || "")
     if (!Scenes.contains(nextId)) return false
+    // Resolve the focused workspace before applying a click. This prevents a
+    // workspace-change signal racing the scene selection and saving it under
+    // the previous workspace.
+    root.syncFocusedWorkspace(false)
     root.currentSceneId = nextId
     root.chooseWallpaper(false)
     root.revision++
@@ -202,8 +207,8 @@ Item {
 
   function defaultSceneForWorkspace(id) {
     var number = Number(id)
-    if (number >= 1 && number <= root.sceneList.length)
-      return root.sceneList[number - 1].id
+    if (number >= 1 && number <= root.workspaceSceneIds.length)
+      return root.workspaceSceneIds[number - 1]
     return "forge"
   }
 
@@ -220,7 +225,7 @@ Item {
       var wanted = String(saved.wallpaper || "")
       var found = false
       for (var i = 0; i < root.wallpapers.length; i++) {
-        if (root.wallpapers[i].path === wanted) {
+        if (root.wallpapers[i].path === wanted && String(root.wallpapers[i].sceneId || "") === String(saved.scene)) {
           root.currentWallpaperPath = wanted
           root.currentWallpaperTitle = root.wallpapers[i].title
           found = true
@@ -247,7 +252,7 @@ Item {
       root.workspaceState = ({})
       root.configLoaded = true
       root.syncFocusedWorkspace(true)
-      root.scheduleStartupOpen()
+      // First-run state is prepared silently; the canvas opens only on click.
       return
     }
     if (Scenes.contains(parsed.scene)) root.currentSceneId = parsed.scene
@@ -261,13 +266,13 @@ Item {
     root.launchAtStartup = parsed.launchAtStartup === true
     root.configLoaded = true
     root.syncFocusedWorkspace(true)
-    root.scheduleStartupOpen()
+    // Startup remains background-only, even when Open at login is enabled.
   }
 
   function scheduleStartupOpen() {
     if (root.startupOpenHandled) return
     root.startupOpenHandled = true
-    if (root.launchAtStartup || root.firstRun) startupOpenTimer.restart()
+    // Intentionally no-op: never surprise the user with a startup modal.
   }
 
   function setLaunchAtStartup(value) {
@@ -442,7 +447,7 @@ Item {
       root.firstRun = true
       root.configLoaded = true
       root.scheduleConfigSave()
-      root.scheduleStartupOpen()
+      // A missing config must not summon a modal during boot.
     }
   }
 
