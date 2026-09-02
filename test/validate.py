@@ -47,7 +47,14 @@ def main() -> int:
         raise SystemExit("implementation spec is not stored in the repository")
     service = (ROOT / "Service.qml").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    if "launchAtStartup" not in service or "firstRun" not in service or "Open at login" not in readme:
+    if (
+        "launchAtStartup" not in service
+        or "firstRun" not in service
+        or "onboardingComplete" not in service
+        or "workspaceState" not in service
+        or "omarchy-theme-bg-set" not in service
+        or "Open at login" not in readme
+    ):
         raise SystemExit("startup launch preference is not fully documented")
     print("Bloom repository checks passed")
     return 0

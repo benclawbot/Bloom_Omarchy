@@ -21,6 +21,7 @@ Item {
   property string currentView: "scenes"
   property string selectedAgentId: ""
   property bool focusPrimed: false
+  property bool showWelcome: false
 
   readonly property string moduleName: "org.bloom.omarchy"
   readonly property var currentScene: service && service.currentScene
@@ -43,6 +44,7 @@ Item {
     var payload = parsePayload(payloadJson)
     if (payload.view) currentView = String(payload.view)
     if (payload.demo !== undefined && service) service.setDemoMode(payload.demo)
+    showWelcome = service && !service.onboardingComplete
     opened = true
     focusPrimed = false
     Qt.callLater(function() {
@@ -54,6 +56,12 @@ Item {
   function close() {
     opened = false
     focusPrimed = false
+  }
+
+  function finishWelcome() {
+    showWelcome = false
+    if (service) service.completeOnboarding()
+    keyCatcher.forceActiveFocus()
   }
 
   function dismiss() {
@@ -876,6 +884,136 @@ Item {
                   font.family: Style.font.family
                   font.pixelSize: 10
                   lineHeight: 1.4
+                }
+              }
+            }
+
+            Rectangle {
+              id: welcomeCard
+              visible: root.showWelcome
+              z: 10
+              anchors.fill: parent
+              radius: 22
+              color: "#F20B1018"
+              border.width: 1
+              border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.42)
+
+              Column {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - 80, 720)
+                spacing: 16
+
+                Text {
+                  width: parent.width
+                  text: "BLOOM IS ACTIVE"
+                  color: root.accent
+                  font.family: Style.font.family
+                  font.pixelSize: 12
+                  font.bold: true
+                  font.letterSpacing: 2.2
+                  horizontalAlignment: Text.AlignHCenter
+                }
+
+                Text {
+                  width: parent.width
+                  text: "Give every workspace an atmosphere."
+                  color: "#F2F5F9"
+                  font.family: Style.font.family
+                  font.pixelSize: 32
+                  font.bold: true
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.WordWrap
+                }
+
+                Text {
+                  width: parent.width
+                  text: "Bloom is already running in the shell. This canvas is where you shape it; close it anytime and your workspace atmosphere stays in place."
+                  color: "#9AA7B8"
+                  font.family: Style.font.family
+                  font.pixelSize: 13
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.WordWrap
+                  lineHeight: 1.35
+                }
+
+                Flow {
+                  width: parent.width
+                  spacing: 8
+                  layoutDirection: Qt.LeftToRight
+
+                  Repeater {
+                    model: [
+                      { id: "1", name: "FORGE", color: "#F3A45D" },
+                      { id: "2", name: "HUSH", color: "#91D7C8" },
+                      { id: "3", name: "LIBRARY", color: "#E8C773" },
+                      { id: "4", name: "AFTERGLOW", color: "#F28E9A" },
+                      { id: "5", name: "ORBIT", color: "#9FBCFF" }
+                    ]
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: (parent.width - 32) / 5
+                      height: 58
+                      radius: 14
+                      color: Qt.rgba(1, 1, 1, 0.035)
+                      border.width: 1
+                      border.color: Qt.rgba(1, 1, 1, 0.09)
+
+                      Column {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Text {
+                          width: parent.width
+                          text: modelData.id
+                          color: modelData.color
+                          font.family: Style.font.family
+                          font.pixelSize: 11
+                          font.bold: true
+                          horizontalAlignment: Text.AlignHCenter
+                        }
+                        Text {
+                          width: parent.width
+                          text: modelData.name
+                          color: "#E7EDF5"
+                          font.family: Style.font.family
+                          font.pixelSize: 9
+                          font.bold: true
+                          horizontalAlignment: Text.AlignHCenter
+                        }
+                      }
+                    }
+                  }
+                }
+
+                Text {
+                  width: parent.width
+                  text: "Switch workspaces 1 → 5 to feel the difference. Use Open at login in the Signal rail if you want Bloom to open with Omarchy."
+                  color: "#718095"
+                  font.family: Style.font.family
+                  font.pixelSize: 11
+                  horizontalAlignment: Text.AlignHCenter
+                  wrapMode: Text.WordWrap
+                }
+
+                Rectangle {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  width: 190
+                  height: 42
+                  radius: 21
+                  color: root.accent
+                  Text {
+                    anchors.centerIn: parent
+                    text: "ENTER BLOOM"
+                    color: "#0C1119"
+                    font.family: Style.font.family
+                    font.pixelSize: 10
+                    font.bold: true
+                    font.letterSpacing: 1.2
+                  }
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.finishWelcome()
+                  }
                 }
               }
             }

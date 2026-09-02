@@ -39,6 +39,7 @@ Item {
   property bool demoMode: false
   property bool launchAtStartup: false
   property bool firstRun: false
+  property bool onboardingComplete: false
   property bool startupOpenHandled: false
   property bool configLoaded: false
   property bool rescanQueued: false
@@ -237,6 +238,7 @@ Item {
     root.workspaceState = parsed.workspaceState && typeof parsed.workspaceState === "object"
       ? parsed.workspaceState : ({})
     root.firstRun = false
+    root.onboardingComplete = parsed.onboardingComplete === true
     root.launchAtStartup = parsed.launchAtStartup === true
     root.configLoaded = true
     root.syncFocusedWorkspace(true)
@@ -261,6 +263,13 @@ Item {
     return root.setLaunchAtStartup(!root.launchAtStartup)
   }
 
+  function completeOnboarding() {
+    root.onboardingComplete = true
+    root.firstRun = false
+    root.scheduleConfigSave()
+    root.revision++
+  }
+
   function scheduleConfigSave() {
     if (!root.configLoaded) return
     configSaveTimer.restart()
@@ -272,6 +281,7 @@ Item {
       schemaVersion: 1,
       scene: root.currentSceneId,
       launchAtStartup: root.launchAtStartup,
+      onboardingComplete: root.onboardingComplete,
       sceneWallpaper: root.sceneWallpaper,
       workspaceState: root.workspaceState
     }, null, 2) + "\n")

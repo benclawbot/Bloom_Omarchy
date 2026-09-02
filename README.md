@@ -88,6 +88,11 @@ After that, click the glyph whenever you want to open Bloom. If you are
 scripting a non-interactive install, append --yes to accept Omarchy's plugin
 safety prompt.
 
+The first canvas shows an activation card: Bloom is already active in the
+shell, workspaces 1–5 have their initial atmospheres, and closing the canvas
+does not undo the workspace change. Select ENTER BLOOM to move into the normal
+control surface.
+
 If the shell was already running and the glyph is not visible, refresh the
 plugin registry and place it explicitly:
 
