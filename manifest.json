@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "org.bloom.omarchy",
   "name": "Bloom",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Bloom for Omarchy",
-  "description": "A cinematic scene switcher and live Agent Constellation for Omarchy Quattro.",
+  "description": "A cinematic scene switcher, live Agent Constellation, and safe desktop session restore for Omarchy Quattro.",
   "license": "MIT",
   "kinds": [
     "bar-widget",
@@ -19,7 +19,7 @@
   },
   "barWidget": {
     "displayName": "Bloom",
-    "description": "Open the Bloom living workspace canvas.",
+    "description": "Open Bloom controls and choose whether the next boot restores this desktop setup.",
     "category": "Workspace",
     "defaultSection": "right",
     "allowMultiple": false,
