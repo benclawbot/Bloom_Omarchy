@@ -45,6 +45,7 @@ def main() -> int:
         raise SystemExit("QML must not reference SVG assets")
     if not (ROOT / "docs/OMARCHY_BLOOM_SPEC.md").exists():
         raise SystemExit("implementation spec is not stored in the repository")
+
     service = (ROOT / "Service.qml").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     if (
@@ -53,10 +54,28 @@ def main() -> int:
         or "firstRun" not in service
         or "onboardingComplete" not in service
         or "workspaceState" not in service
-        or "omarchy-theme-bg-set" not in service
         or "Open at login" not in readme
     ):
         raise SystemExit("startup launch preference is not fully documented")
+
+    wallpaper_helper = ROOT / "scripts/bloom-workspace-bg"
+    if not wallpaper_helper.exists():
+        raise SystemExit("workspace wallpaper helper is missing")
+    wallpaper_source = wallpaper_helper.read_text(encoding="utf-8")
+    for required_token in ("swaybg", "realpath", "uwsm-app"):
+        if required_token not in wallpaper_source:
+            raise SystemExit(f"workspace wallpaper helper missing: {required_token}")
+    if "current/background" in wallpaper_source or "omarchy-theme-bg-set" in service:
+        raise SystemExit("workspace wallpaper selection must not mutate Omarchy's global background")
+    for required_token in (
+        "workspaceBgCommand",
+        "selectWallpaper",
+        "wallpaperItemForPath",
+        "workspaceState",
+        "schemaVersion: 2",
+    ):
+        if required_token not in service:
+            raise SystemExit(f"workspace wallpaper persistence missing: {required_token}")
 
     session = ROOT / "scripts/bloom-session"
     if not session.exists():
