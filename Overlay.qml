@@ -849,6 +849,7 @@ Item {
                   }
 
                   Rectangle {
+                    visible: false
                     width: parent.width
                     height: 52
                     radius: 16
