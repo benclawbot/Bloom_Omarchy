@@ -11,8 +11,8 @@ BarWidget {
   readonly property color pulseColor: bloom && bloom.attentionCount > 0
     ? "#FF8DA1" : (bloom && bloom.currentScene ? bloom.currentScene.accent : Color.accent)
 
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
+  implicitWidth: controls.implicitWidth
+  implicitHeight: controls.implicitHeight
 
   function open(view) {
     if (bar && bar.shell) bar.shell.summon(moduleName, JSON.stringify({ view: view || "scenes" }))
@@ -26,27 +26,44 @@ BarWidget {
     if (bar && bar.shell) bar.shell.toggle(moduleName, JSON.stringify({ view: "scenes" }))
   }
 
-  BarIconButton {
-    id: button
-    anchors.fill: parent
-    bar: root.bar
-    text: root.setting("glyph", "✦")
-    active: !!root.bloom && root.bloom.attentionCount > 0
-    tooltipText: root.bloom && root.bloom.attentionCount > 0
-      ? "Bloom · " + root.bloom.attentionCount + " agent needs you"
-      : "Bloom · " + (root.bloom && root.bloom.currentScene ? root.bloom.currentScene.name : "Forge")
-    onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton && root.bloom)
-        root.bloom.nextWallpaper()
-      else if (buttonCode === Qt.MiddleButton && root.bloom)
-        root.bloom.nextScene(1)
-      else
-        root.toggle()
+  Row {
+    id: controls
+    spacing: Style.space(2)
+
+    BarIconButton {
+      id: button
+      bar: root.bar
+      text: root.setting("glyph", "✦")
+      active: !!root.bloom && root.bloom.attentionCount > 0
+      tooltipText: root.bloom && root.bloom.attentionCount > 0
+        ? "Bloom · " + root.bloom.attentionCount + " agent needs you"
+        : "Bloom · open controls · " + (root.bloom && root.bloom.currentScene ? root.bloom.currentScene.name : "Forge")
+      onPressed: function(buttonCode) {
+        if (buttonCode === Qt.RightButton && root.bloom)
+          root.bloom.nextWallpaper()
+        else if (buttonCode === Qt.MiddleButton && root.bloom)
+          root.bloom.nextScene(1)
+        else
+          root.toggle()
+      }
+    }
+
+    BarIconButton {
+      id: activeToggle
+      bar: root.bar
+      text: root.bloom && root.bloom.bloomActive ? "ON" : "OFF"
+      active: !!root.bloom && root.bloom.bloomActive
+      tooltipText: root.bloom && root.bloom.bloomActive
+        ? "Bloom is active · click to pause"
+        : "Bloom is paused · click to activate"
+      onPressed: function() {
+        if (root.bloom) root.bloom.toggleBloomActive()
+      }
     }
 
     Rectangle {
-      anchors.right: parent.right
-      anchors.top: parent.top
+      anchors.right: button.right
+      anchors.top: button.top
       width: root.bloom && root.bloom.attentionCount > 0 ? Style.space(6) : 0
       height: width
       radius: width / 2
