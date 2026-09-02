@@ -38,7 +38,7 @@ BarWidget {
 
   function setSessionMode(restore) {
     root.restoreLastSetup = !!restore
-    Quickshell.execDetached([root.sessionCommand, "set", restore ? "restore" : "fresh"])
+    Quickshell.execDetached(["python3", root.sessionCommand, "set", restore ? "restore" : "fresh"])
     sessionRefresh.restart()
   }
 
@@ -105,7 +105,7 @@ BarWidget {
 
   Process {
     id: sessionRefresh
-    command: [root.sessionCommand, "auto"]
+    command: ["python3", root.sessionCommand, "auto"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.restoreLastSetup = String(text || "").trim() !== "fresh"
