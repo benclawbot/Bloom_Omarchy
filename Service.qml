@@ -241,6 +241,9 @@ Item {
     try { parsed = JSON.parse(String(raw || "")) } catch (e) { parsed = null }
     if (!parsed || typeof parsed !== "object") {
       root.firstRun = true
+      // A fresh Bloom installation is useful immediately. The service is
+      // active by default; the user can pause it from either visible toggle.
+      root.bloomActive = true
       root.workspaceState = ({})
       root.configLoaded = true
       root.syncFocusedWorkspace(true)
@@ -549,6 +552,7 @@ Item {
   }
 
   Component.onCompleted: {
+    root.bloomActive = true
     ensureDirs.running = true
     root.refreshWallpapers()
     agentScan.running = true
