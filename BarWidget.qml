@@ -46,6 +46,18 @@ BarWidget {
         else
           root.toggle()
       }
+
+      Rectangle {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        width: root.bloom && root.bloom.attentionCount > 0 ? Style.space(6) : 0
+        height: width
+        radius: width / 2
+        color: "#FF8DA1"
+        visible: width > 0
+        border.width: 1
+        border.color: Qt.rgba(0.08, 0.1, 0.14, 0.85)
+      }
     }
 
     BarIconButton {
@@ -61,16 +73,5 @@ BarWidget {
       }
     }
 
-    Rectangle {
-      anchors.right: button.right
-      anchors.top: button.top
-      width: root.bloom && root.bloom.attentionCount > 0 ? Style.space(6) : 0
-      height: width
-      radius: width / 2
-      color: "#FF8DA1"
-      visible: width > 0
-      border.width: 1
-      border.color: Qt.rgba(0.08, 0.1, 0.14, 0.85)
-    }
   }
 }
