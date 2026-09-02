@@ -57,6 +57,31 @@ def main() -> int:
         or "Open at login" not in readme
     ):
         raise SystemExit("startup launch preference is not fully documented")
+
+    session = ROOT / "scripts/bloom-session"
+    if not session.exists():
+        raise SystemExit("session manager is missing")
+    session_source = session.read_text(encoding="utf-8")
+    compile(session_source, str(session), "exec")
+    if "shell=True" in session_source or "/proc/{pid}/cmdline" in session_source:
+        raise SystemExit("session manager must not replay shell/process command lines")
+    for required_token in (
+        "desktop-session.json",
+        "restoreLastSetup",
+        "session-restore.boot",
+        "fcntl.flock",
+        "os.replace",
+        "gtk-launch",
+        "movetoworkspacesilent",
+    ):
+        if required_token not in session_source:
+            raise SystemExit(f"session manager missing safety/restore primitive: {required_token}")
+
+    bar = (ROOT / "BarWidget.qml").read_text(encoding="utf-8")
+    for required_token in ("SAVE", "FRESH", "bloom-session", "restoreLastSetup"):
+        if required_token not in bar:
+            raise SystemExit(f"top-bar session control missing: {required_token}")
+
     print("Bloom repository checks passed")
     return 0
 
