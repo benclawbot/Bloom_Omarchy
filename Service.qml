@@ -46,6 +46,7 @@ Item {
   property bool configLoaded: false
   property bool rescanQueued: false
   property double lastActiveToggleAt: 0
+  property bool sceneWriteInProgress: false
   property int revision: 0
 
   readonly property var currentScene: Scenes.get(currentSceneId)
@@ -167,7 +168,7 @@ Item {
 
   function toggleBloomActive() {
     var now = Date.now()
-    if (now - root.lastActiveToggleAt < 280) return root.bloomActive
+    if (now - root.lastActiveToggleAt < 900) return root.bloomActive
     root.lastActiveToggleAt = now
     return root.setBloomActive(!root.bloomActive)
   }
@@ -175,12 +176,14 @@ Item {
   function setScene(id) {
     var nextId = String(id || "")
     if (!Scenes.contains(nextId)) return false
-    // Resolve the focused workspace before applying a click. This prevents a
-    // workspace-change signal racing the scene selection and saving it under
-    // the previous workspace.
-    root.syncFocusedWorkspace(false)
+    if (root.currentSceneId === nextId) return true
+    // The focused workspace is already tracked by the service timer. Do not
+    // resync here: a Hyprland notification arriving during a click could
+    // restore the previous scene after the user made a selection.
     root.currentSceneId = nextId
+    root.sceneWriteInProgress = true
     root.chooseWallpaper(false)
+    root.sceneWriteInProgress = false
     root.revision++
     root.scheduleConfigSave()
     return true
@@ -218,6 +221,7 @@ Item {
 
   function syncFocusedWorkspace(force) {
     if (!root.bloomActive) return
+    if (root.sceneWriteInProgress) return
     var focused = Hyprland.focusedWorkspace
     var id = focused && focused.id !== undefined ? String(focused.id) : "1"
     if (!force && id === root.currentWorkspaceId) return
