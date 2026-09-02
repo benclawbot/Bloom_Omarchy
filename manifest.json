@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "org.bloom.omarchy",
   "name": "Bloom",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Bloom for Omarchy",
   "description": "A cinematic scene switcher and live Agent Constellation for Omarchy Quattro.",
   "license": "MIT",
