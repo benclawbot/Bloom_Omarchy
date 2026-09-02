@@ -37,6 +37,9 @@ case "$command" in
   startup)
     omarchy-shell bloom startup "${1:-}"
     ;;
+  active)
+    omarchy-shell bloom active "${1:-}"
+    ;;
   focus)
     [ "$#" -eq 1 ] || { echo "usage: bloomctl focus <agent-id>" >&2; exit 64; }
     omarchy-shell bloom focus "$1"

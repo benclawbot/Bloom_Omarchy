@@ -37,6 +37,7 @@ Item {
   property var eventAgents: []
   property var agents: []
   property bool demoMode: false
+  property bool bloomActive: true
   property bool launchAtStartup: false
   property bool firstRun: false
   property bool onboardingComplete: false
@@ -143,7 +144,7 @@ Item {
 
   function applyWallpaperToDesktop(path) {
     var value = root.filesystemPath(path)
-    if (!value) return
+    if (!value || !root.bloomActive) return
     // The live background service alone is ephemeral. This first-party
     // command persists the current background symlink and updates the live
     // renderer immediately.
@@ -151,6 +152,19 @@ Item {
       ? root.omarchyPath + "/bin/omarchy-theme-bg-set"
       : "omarchy-theme-bg-set"
     Quickshell.execDetached([command, value])
+  }
+
+  function setBloomActive(value) {
+    var normalized = String(value).toLowerCase()
+    root.bloomActive = value === true || normalized === "true" || normalized === "1" || normalized === "on"
+    root.scheduleConfigSave()
+    root.revision++
+    if (root.bloomActive) root.syncFocusedWorkspace(true)
+    return root.bloomActive
+  }
+
+  function toggleBloomActive() {
+    return root.setBloomActive(!root.bloomActive)
   }
 
   function setScene(id) {
@@ -194,6 +208,7 @@ Item {
   }
 
   function syncFocusedWorkspace(force) {
+    if (!root.bloomActive) return
     var focused = Hyprland.focusedWorkspace
     var id = focused && focused.id !== undefined ? String(focused.id) : "1"
     if (!force && id === root.currentWorkspaceId) return
@@ -238,6 +253,7 @@ Item {
     root.workspaceState = parsed.workspaceState && typeof parsed.workspaceState === "object"
       ? parsed.workspaceState : ({})
     root.firstRun = false
+    root.bloomActive = parsed.bloomActive !== false
     root.onboardingComplete = parsed.onboardingComplete === true
     root.launchAtStartup = parsed.launchAtStartup === true
     root.configLoaded = true
@@ -280,6 +296,7 @@ Item {
     configFile.setText(JSON.stringify({
       schemaVersion: 1,
       scene: root.currentSceneId,
+      bloomActive: root.bloomActive,
       launchAtStartup: root.launchAtStartup,
       onboardingComplete: root.onboardingComplete,
       sceneWallpaper: root.sceneWallpaper,
@@ -519,6 +536,14 @@ Item {
       else if (mode === "off" || mode === "false" || mode === "0") root.setLaunchAtStartup(false)
       else root.toggleLaunchAtStartup()
       return root.launchAtStartup ? "on" : "off"
+    }
+    function active(value: string): string {
+      var mode = String(value || "").toLowerCase()
+      if (mode === "status") return root.bloomActive ? "on" : "off"
+      if (mode === "on" || mode === "true" || mode === "1") root.setBloomActive(true)
+      else if (mode === "off" || mode === "false" || mode === "0") root.setBloomActive(false)
+      else root.toggleBloomActive()
+      return root.bloomActive ? "on" : "off"
     }
     function focus(id: string): string { return root.focusAgent(id) || "unknown-agent" }
   }

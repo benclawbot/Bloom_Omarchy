@@ -786,6 +786,8 @@ Settings are grouped into five pages:
 ### Startup
 
 - **Open Bloom canvas at login**, off by default.
+- **Bloom active**, on by default; when paused, Bloom stops applying scene and
+  wallpaper changes to workspaces.
 - Persist the preference in Bloom's configuration and apply it when the
   already-loaded Omarchy shell service becomes ready.
 - Expose the same on/off/status control in the Signal rail and local IPC.
@@ -818,6 +820,7 @@ Example:
   "schemaVersion": 1,
   "defaultScene": "forge",
   "mode": "manual",
+  "bloomActive": true,
   "launchAtStartup": false,
   "motion": "gentle",
   "ambientIntensity": 0.65,

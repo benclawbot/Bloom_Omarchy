@@ -193,13 +193,16 @@ bloomctl scene forge
 bloomctl next-scene
 bloomctl next-wallpaper
 bloomctl demo true
+bloomctl active off
+bloomctl active status
 bloomctl startup on
 bloomctl startup status
 ~~~
 
 Copy or symlink it into a directory on your PATH if you want to use it from
 keybindings or menu actions. Use `bloomctl startup off` to disable the
-automatic canvas launch.
+automatic canvas launch, or `bloomctl active off` to pause Bloom's
+workspace atmospheres. The Signal rail shows the same two toggles.
 
 ## Omarchy menu extension
 

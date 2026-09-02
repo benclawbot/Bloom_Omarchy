@@ -49,6 +49,7 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     if (
         "launchAtStartup" not in service
+        or "bloomActive" not in service
         or "firstRun" not in service
         or "onboardingComplete" not in service
         or "workspaceState" not in service
