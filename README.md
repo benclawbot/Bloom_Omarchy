@@ -79,11 +79,12 @@ omarchy plugin add https://github.com/benclawbot/Bloom_Omarchy.git --enable
 ~~~
 
 `--enable` enables the plugin and Bloom's manifest declares the right bar
-section, so the Bloom glyph should appear immediately. Click that glyph for
-the first launch. On a genuinely fresh install, Bloom also reveals the canvas
-once automatically so the feature is discoverable; that one-time reveal does
-not enable future startup launches. If you are scripting a non-interactive
-install, append --yes to accept Omarchy's plugin safety prompt.
+section, so the Bloom glyph should appear immediately. On a genuinely fresh
+install, Bloom reveals the canvas once automatically so the feature is
+discoverable; that one-time reveal does not enable future startup launches.
+After that, click the glyph whenever you want to open Bloom. If you are
+scripting a non-interactive install, append --yes to accept Omarchy's plugin
+safety prompt.
 
 If the shell was already running and the glyph is not visible, refresh the
 plugin registry and place it explicitly:
@@ -100,8 +101,8 @@ process/file APIs described below.
 ## How Bloom launches
 
 Enabling the plugin loads Bloom's lightweight service with omarchy-shell.
-The full canvas stays out of the way until you click the Bloom bar glyph or
-run either of these commands:
+After the first-run reveal, the full canvas stays out of the way until you
+click the Bloom bar glyph or run either of these commands:
 
 ~~~bash
 bloomctl open
