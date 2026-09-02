@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import qs.Commons
 import "models/Scenes.js" as Scenes
 import "models/AgentStore.js" as AgentStore
@@ -26,7 +27,9 @@ Item {
 
   property var sceneList: Scenes.all()
   property string currentSceneId: "forge"
+  property string currentWorkspaceId: "1"
   property var sceneWallpaper: ({})
+  property var workspaceState: ({})
   property string currentWallpaperPath: ""
   property string currentWallpaperTitle: ""
   property var wallpapers: []
@@ -50,6 +53,12 @@ Item {
     if (!value) return ""
     if (value.indexOf("file://") === 0) return value
     return Util.fileUrl(value)
+  }
+
+  function filesystemPath(path) {
+    var value = String(path || "")
+    if (value.indexOf("file://") !== 0) return value
+    try { return decodeURIComponent(value.slice(7)) } catch (e) { return value.slice(7) }
   }
 
   function bundledWallpapers() {
@@ -91,7 +100,7 @@ Item {
     }
 
     root.wallpapers = combined
-    root.chooseWallpaper(false)
+    root.syncFocusedWorkspace(true)
     root.revision++
   }
 
@@ -107,7 +116,10 @@ Item {
     var options = WallpaperIndex.forScene(root.wallpapers, root.currentSceneId)
     if (!options.length) return
 
-    var preferred = String(root.sceneWallpaper[root.currentSceneId] || "")
+    var workspace = root.workspaceState[root.currentWorkspaceId]
+    var preferred = workspace && workspace.scene === root.currentSceneId
+      ? String(workspace.wallpaper || "")
+      : String(root.sceneWallpaper[root.currentSceneId] || "")
     var index = -1
     for (var i = 0; i < options.length; i++) {
       if (options[i].path === preferred) {
@@ -125,16 +137,19 @@ Item {
     for (var key in root.sceneWallpaper) next[key] = root.sceneWallpaper[key]
     next[root.currentSceneId] = root.currentWallpaperPath
     root.sceneWallpaper = next
-    root.scheduleConfigSave()
+    root.rememberWorkspaceState()
   }
 
   function applyWallpaperToDesktop(path) {
-    var value = String(path || "")
-    if (!value || !root.shell || typeof root.shell.callIfLoaded !== "function") return
-    // Quattro's first-party background service owns the actual desktop layer.
-    // Bloom asks it to transition; the overlay then reuses the same selected
-    // path for its preview, so the room never drifts from the desktop.
-    root.shell.callIfLoaded("omarchy.background", "set", value)
+    var value = root.filesystemPath(path)
+    if (!value) return
+    // The live background service alone is ephemeral. This first-party
+    // command persists the current background symlink and updates the live
+    // renderer immediately.
+    var command = root.omarchyPath
+      ? root.omarchyPath + "/bin/omarchy-theme-bg-set"
+      : "omarchy-theme-bg-set"
+    Quickshell.execDetached([command, value])
   }
 
   function setScene(id) {
@@ -159,23 +174,72 @@ Item {
     return root.currentWallpaperPath
   }
 
+  function rememberWorkspaceState() {
+    var next = ({})
+    for (var key in root.workspaceState) next[key] = root.workspaceState[key]
+    next[String(root.currentWorkspaceId || "1")] = {
+      scene: root.currentSceneId,
+      wallpaper: root.currentWallpaperPath
+    }
+    root.workspaceState = next
+    root.scheduleConfigSave()
+  }
+
+  function defaultSceneForWorkspace(id) {
+    var number = Number(id)
+    if (number >= 1 && number <= root.sceneList.length)
+      return root.sceneList[number - 1].id
+    return "forge"
+  }
+
+  function syncFocusedWorkspace(force) {
+    var focused = Hyprland.focusedWorkspace
+    var id = focused && focused.id !== undefined ? String(focused.id) : "1"
+    if (!force && id === root.currentWorkspaceId) return
+    root.currentWorkspaceId = id
+
+    var saved = root.workspaceState[id]
+    if (saved && Scenes.contains(saved.scene)) {
+      root.currentSceneId = saved.scene
+      var wanted = String(saved.wallpaper || "")
+      var found = false
+      for (var i = 0; i < root.wallpapers.length; i++) {
+        if (root.wallpapers[i].path === wanted) {
+          root.currentWallpaperPath = wanted
+          root.currentWallpaperTitle = root.wallpapers[i].title
+          found = true
+          break
+        }
+      }
+      if (found) root.applyWallpaperToDesktop(wanted)
+      else root.chooseWallpaper(false)
+    } else {
+      root.currentSceneId = root.defaultSceneForWorkspace(id)
+      root.chooseWallpaper(false)
+    }
+    root.revision++
+  }
+
   function parseConfig(raw) {
     var parsed = null
     try { parsed = JSON.parse(String(raw || "")) } catch (e) { parsed = null }
     if (!parsed || typeof parsed !== "object") {
       root.firstRun = true
+      root.workspaceState = ({})
       root.configLoaded = true
-      root.chooseWallpaper(false)
+      root.syncFocusedWorkspace(true)
       root.scheduleStartupOpen()
       return
     }
     if (Scenes.contains(parsed.scene)) root.currentSceneId = parsed.scene
     root.sceneWallpaper = parsed.sceneWallpaper && typeof parsed.sceneWallpaper === "object"
       ? parsed.sceneWallpaper : ({})
+    root.workspaceState = parsed.workspaceState && typeof parsed.workspaceState === "object"
+      ? parsed.workspaceState : ({})
     root.firstRun = false
     root.launchAtStartup = parsed.launchAtStartup === true
     root.configLoaded = true
-    root.chooseWallpaper(false)
+    root.syncFocusedWorkspace(true)
     root.scheduleStartupOpen()
   }
 
@@ -208,7 +272,8 @@ Item {
       schemaVersion: 1,
       scene: root.currentSceneId,
       launchAtStartup: root.launchAtStartup,
-      sceneWallpaper: root.sceneWallpaper
+      sceneWallpaper: root.sceneWallpaper,
+      workspaceState: root.workspaceState
     }, null, 2) + "\n")
   }
 
@@ -409,6 +474,19 @@ Item {
     onTriggered: root.summon("scenes")
   }
 
+  Connections {
+    target: Hyprland
+    function onFocusedWorkspaceChanged() { root.syncFocusedWorkspace(false) }
+  }
+
+  Timer {
+    id: workspaceTimer
+    interval: 350
+    repeat: true
+    running: true
+    onTriggered: root.syncFocusedWorkspace(false)
+  }
+
   IpcHandler {
     target: "bloom"
 
@@ -439,5 +517,6 @@ Item {
     ensureDirs.running = true
     root.refreshWallpapers()
     agentScan.running = true
+    root.syncFocusedWorkspace(true)
   }
 }

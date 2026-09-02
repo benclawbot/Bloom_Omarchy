@@ -49,6 +49,8 @@ The interface is intentionally useful even before integrations are perfect:
 - attention nodes move to the front of the list and tint the bar glyph;
 - a node with a live PID can focus its window through Hyprland;
 - demo mode makes the full composition easy to review without running agents.
+- each focused workspace keeps its own scene and wallpaper assignment;
+  workspaces 1–5 begin as Forge, Hush, Library, Afterglow, and Orbit.
 
 ![Bloom architecture artwork](docs/assets/bloom-architecture.png)
 
@@ -114,6 +116,12 @@ rail. Turn it on once and Bloom will open the scene canvas shortly after
 Omarchy starts. The preference is stored in
 `XDG_CONFIG_HOME/omarchy-bloom/config.json`; it does not create a second
 startup process or modify your compositor configuration.
+
+Bloom also scopes atmosphere to the focused Hyprland workspace. Selecting a
+scene or wallpaper while you are on workspace 2 changes workspace 2's
+assignment; switching to workspace 1–5 restores that workspace's saved
+assignment. The desktop wallpaper is committed through Omarchy's own
+background setter, so it remains after Bloom closes.
 
 ## Controls
 

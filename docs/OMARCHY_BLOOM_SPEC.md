@@ -878,6 +878,7 @@ ${XDG_RUNTIME_DIR}/omarchy-bloom/agent-events.sock
 State includes:
 
 - active scene per workspace
+- persistent wallpaper per workspace
 - last wallpaper and recent rotation history
 - project cluster positions
 - known session-to-window associations

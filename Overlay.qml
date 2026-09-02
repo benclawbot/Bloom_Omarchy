@@ -731,7 +731,9 @@ Item {
                       Text {
                         text: service && service.demoMode
                           ? "Demo signals are on"
-                          : "Listening for local sessions"
+                          : service
+                            ? "Workspace " + service.currentWorkspaceId + " · " + service.currentScene.name
+                            : "Listening for local sessions"
                         color: "#8795A9"
                         font.family: Style.font.family
                         font.pixelSize: 10
