@@ -1,103 +1,63 @@
 #!/usr/bin/env python3
-"""Bloom desktop session persistence for Hyprland.
+"""Bloom session entry point with silent destination-aware app launching.
 
-The manager deliberately stores only window metadata and a conservative launch
-identity. It never persists or replays a process command line, so secrets and
-one-shot shell arguments are not copied into the session file.
+The session core remains unchanged. This shim overrides only application launch
+so restored windows are born on their saved Hyprland workspace instead of
+briefly appearing on the user's active workspace before relocation.
 """
 
 from __future__ import annotations
 
-import fcntl
-import json
 import os
 import pathlib
+import runpy
+import shlex
 import subprocess
 import sys
-import tempfile
-import time
 from typing import Any
 
-APP_NAME = "omarchy-bloom"
-SCHEMA_VERSION = 1
-AUTO_SNAPSHOT_SECONDS = 15.0
-RESTORE_WAIT_SECONDS = 8.0
-RESTORE_POLL_SECONDS = 0.15
+CORE = pathlib.Path(__file__).with_name("bloom-session-core")
+core = runpy.run_path(str(CORE), run_name="bloom_session_core")
 
-HOME = pathlib.Path.home()
-STATE_HOME = pathlib.Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state"))
-CONFIG_HOME = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
-RUNTIME_HOME = pathlib.Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
-STATE_DIR = STATE_HOME / APP_NAME
-CONFIG_DIR = CONFIG_HOME / APP_NAME
-RUNTIME_DIR = RUNTIME_HOME / APP_NAME
-SESSION_FILE = STATE_DIR / "desktop-session.json"
-SETTINGS_FILE = CONFIG_DIR / "session.json"
-LOCK_FILE = RUNTIME_DIR / "session.lock"
-BOOT_MARKER = RUNTIME_DIR / "session-restore.boot"
-LAST_SNAPSHOT = RUNTIME_DIR / "session-snapshot.time"
+# Preserve the public surface of the original script for focused tests and any
+# local tooling that imports bloom-session rather than only invoking its CLI.
+for name, value in core.items():
+    if name not in {"__name__", "__file__", "__package__", "__loader__", "__spec__"}:
+        globals()[name] = value
 
 
-def ensure_dirs() -> None:
-    for path in (STATE_DIR, CONFIG_DIR, RUNTIME_DIR):
-        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+def launch_target(target: dict[str, Any]) -> bool:
+    launch = target.get("launch") if isinstance(target.get("launch"), dict) else {}
+    desktop_id = str(launch.get("desktopId", ""))
+    executable = str(launch.get("executable", ""))
 
+    command: list[str] = []
+    if core["valid_desktop_id"](desktop_id):
+        command = ["gtk-launch", desktop_id]
+    else:
+        path = pathlib.Path(executable)
+        if path.is_absolute() and path.is_file() and os.access(path, os.X_OK):
+            command = [str(path)]
 
-def atomic_json(path: pathlib.Path, value: Any) -> None:
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    if not command:
+        return False
+
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(value, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, path)
-    finally:
-        try:
-            os.unlink(tmp)
-        except FileNotFoundError:
-            pass
+        workspace = max(1, int(target.get("workspace", 1) or 1))
+    except (TypeError, ValueError):
+        workspace = 1
 
-
-def read_json(path: pathlib.Path, default: Any) -> Any:
-    try:
-        with path.open(encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, ValueError, TypeError):
-        return default
-
-
-def restore_enabled() -> bool:
-    settings = read_json(SETTINGS_FILE, {})
-    return settings.get("restoreLastSetup", True) is not False
-
-
-def set_restore_enabled(enabled: bool) -> None:
-    atomic_json(SETTINGS_FILE, {"schemaVersion": 1, "restoreLastSetup": bool(enabled)})
-
-
-def hypr_json(*args: str) -> Any:
-    try:
-        result = subprocess.run(
-            ["hyprctl", "-j", *args],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=3,
-        )
-        return json.loads(result.stdout)
-    except (OSError, subprocess.SubprocessError, ValueError):
-        return None
-
-
-def dispatch(*args: str) -> bool:
+    command_text = " ".join(shlex.quote(part) for part in command)
     try:
         subprocess.run(
-            ["hyprctl", "dispatch", *args],
+            [
+                "hyprctl",
+                "dispatch",
+                "exec",
+                f"[workspace {workspace} silent] {command_text}",
+            ],
             check=True,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=3,
@@ -107,521 +67,11 @@ def dispatch(*args: str) -> bool:
         return False
 
 
-def current_boot_id() -> str:
-    try:
-        return pathlib.Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
-    except OSError:
-        return "unknown"
-
-
-def process_executable(pid: int) -> str:
-    if pid <= 0:
-        return ""
-    try:
-        path = pathlib.Path(f"/proc/{pid}/exe").resolve(strict=True)
-    except OSError:
-        return ""
-    try:
-        stat = path.stat()
-    except OSError:
-        return ""
-    if not path.is_absolute() or not stat.st_mode:
-        return ""
-    return str(path)
-
-
-def desktop_dirs() -> list[pathlib.Path]:
-    data_home = pathlib.Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
-    dirs = [data_home / "applications"]
-    for item in os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":"):
-        if item:
-            dirs.append(pathlib.Path(item) / "applications")
-    return dirs
-
-
-def parse_desktop_file(path: pathlib.Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    try:
-        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            line = raw.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            if key in {"Type", "Exec", "StartupWMClass", "NoDisplay", "Hidden"}:
-                values[key] = value.strip()
-    except OSError:
-        return {}
-    return values
-
-
-def exec_basename(exec_value: str) -> str:
-    if not exec_value:
-        return ""
-    token = exec_value.strip().split()[0].strip('"\'')
-    return pathlib.Path(token).name
-
-
-def find_desktop_id(window_class: str, initial_class: str, executable: str) -> str:
-    class_keys = {window_class.casefold(), initial_class.casefold()}
-    class_keys.discard("")
-    executable_name = pathlib.Path(executable).name.casefold() if executable else ""
-    fallback = ""
-    for directory in desktop_dirs():
-        if not directory.is_dir():
-            continue
-        try:
-            files = list(directory.glob("*.desktop"))
-        except OSError:
-            continue
-        for path in files:
-            values = parse_desktop_file(path)
-            if values.get("Type", "Application") != "Application":
-                continue
-            if values.get("Hidden", "false").lower() == "true":
-                continue
-            startup = values.get("StartupWMClass", "").casefold()
-            exec_name = exec_basename(values.get("Exec", "")).casefold()
-            desktop_id = path.name[:-8]
-            if startup and startup in class_keys:
-                return desktop_id
-            if executable_name and exec_name == executable_name and not fallback:
-                fallback = desktop_id
-    return fallback
-
-
-def normalize_pair(value: Any) -> list[int]:
-    if not isinstance(value, list) or len(value) != 2:
-        return [0, 0]
-    try:
-        return [int(value[0]), int(value[1])]
-    except (TypeError, ValueError):
-        return [0, 0]
-
-
-def safe_int(value: Any, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def snapshot_clients() -> list[dict[str, Any]] | None:
-    clients = hypr_json("clients")
-    if not isinstance(clients, list):
-        return None
-    monitors = hypr_json("monitors")
-    monitor_names: dict[int, str] = {}
-    if isinstance(monitors, list):
-        for monitor in monitors:
-            if not isinstance(monitor, dict):
-                continue
-            try:
-                monitor_names[int(monitor.get("id", -1))] = str(monitor.get("name", ""))
-            except (TypeError, ValueError):
-                continue
-    saved: list[dict[str, Any]] = []
-    for index, client in enumerate(clients):
-        if not isinstance(client, dict):
-            continue
-        address = str(client.get("address", ""))
-        workspace = client.get("workspace") if isinstance(client.get("workspace"), dict) else {}
-        try:
-            workspace_id = int(workspace.get("id", 0))
-            pid = int(client.get("pid", 0))
-        except (TypeError, ValueError):
-            continue
-        if workspace_id <= 0 or not address:
-            continue
-        window_class = str(client.get("class", ""))
-        initial_class = str(client.get("initialClass", ""))
-        executable = process_executable(pid)
-        desktop_id = find_desktop_id(window_class, initial_class, executable)
-        try:
-            monitor_id = int(client.get("monitor", -1))
-        except (TypeError, ValueError):
-            monitor_id = -1
-        saved.append(
-            {
-                "order": index,
-                "class": window_class,
-                "initialClass": initial_class,
-                "title": str(client.get("title", "")),
-                "initialTitle": str(client.get("initialTitle", "")),
-                "workspace": workspace_id,
-                "workspaceName": str(workspace.get("name", "")),
-                "monitor": monitor_id,
-                "monitorName": monitor_names.get(monitor_id, ""),
-                "floating": bool(client.get("floating", False)),
-                "fullscreen": int(client.get("fullscreen", 0) or 0),
-                "pinned": bool(client.get("pinned", False)),
-                "at": normalize_pair(client.get("at")),
-                "size": normalize_pair(client.get("size")),
-                "launch": {
-                    "desktopId": desktop_id,
-                    "executable": executable if executable.startswith("/") else "",
-                },
-            }
-        )
-    return saved
-
-
-def snapshot() -> bool:
-    clients = snapshot_clients()
-    if clients is None:
-        return False
-    active = hypr_json("activeworkspace")
-    active_workspace = 1
-    if isinstance(active, dict):
-        try:
-            active_workspace = int(active.get("id", 1))
-        except (TypeError, ValueError):
-            pass
-    payload = {
-        "schemaVersion": SCHEMA_VERSION,
-        "savedAt": int(time.time()),
-        "activeWorkspace": active_workspace,
-        "windows": clients,
-    }
-    atomic_json(SESSION_FILE, payload)
-    LAST_SNAPSHOT.write_text(str(time.monotonic()), encoding="utf-8")
-    return True
-
-
-def client_identity(client: dict[str, Any]) -> tuple[str, str]:
-    return (
-        str(client.get("initialClass", "")).casefold(),
-        str(client.get("class", "")).casefold(),
-    )
-
-
-def target_identity(target: dict[str, Any]) -> tuple[str, str]:
-    return (
-        str(target.get("initialClass", "")).casefold(),
-        str(target.get("class", "")).casefold(),
-    )
-
-
-def match_score(target: dict[str, Any], client: dict[str, Any]) -> int:
-    wanted_initial, wanted_class = target_identity(target)
-    actual_initial, actual_class = client_identity(client)
-    score = 0
-    if wanted_initial and actual_initial == wanted_initial:
-        score += 100
-    if wanted_class and actual_class == wanted_class:
-        score += 80
-    if wanted_initial and actual_class == wanted_initial:
-        score += 30
-    if wanted_class and actual_initial == wanted_class:
-        score += 30
-    if score == 0:
-        return -1
-
-    wanted_initial_title = str(target.get("initialTitle", "")).casefold()
-    wanted_title = str(target.get("title", "")).casefold()
-    if wanted_initial_title and str(client.get("initialTitle", "")).casefold() == wanted_initial_title:
-        score += 24
-    if wanted_title and str(client.get("title", "")).casefold() == wanted_title:
-        score += 16
-    try:
-        if int(client.get("workspace", {}).get("id", 0)) == int(target.get("workspace", 0)):
-            score += 4
-    except (AttributeError, TypeError, ValueError):
-        pass
-    return score
-
-
-def matching_client(
-    target: dict[str, Any], claimed: set[str], clients: Any = None
-) -> dict[str, Any] | None:
-    if clients is None:
-        clients = hypr_json("clients")
-    if not isinstance(clients, list):
-        return None
-    best: dict[str, Any] | None = None
-    best_score = -1
-    for client in clients:
-        if not isinstance(client, dict):
-            continue
-        address = str(client.get("address", ""))
-        if not address or address in claimed:
-            continue
-        score = match_score(target, client)
-        if score > best_score:
-            best = client
-            best_score = score
-    return best
-
-
-def valid_desktop_id(desktop_id: str) -> bool:
-    if not desktop_id or "/" in desktop_id or "\\" in desktop_id or ".." in desktop_id:
-        return False
-    for directory in desktop_dirs():
-        if (directory / f"{desktop_id}.desktop").is_file():
-            return True
-    return False
-
-
-def launch_target(target: dict[str, Any]) -> bool:
-    launch = target.get("launch") if isinstance(target.get("launch"), dict) else {}
-    desktop_id = str(launch.get("desktopId", ""))
-    executable = str(launch.get("executable", ""))
-    try:
-        if valid_desktop_id(desktop_id):
-            subprocess.Popen(
-                ["gtk-launch", desktop_id],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            return True
-        path = pathlib.Path(executable)
-        if path.is_absolute() and path.is_file() and os.access(path, os.X_OK):
-            subprocess.Popen(
-                [str(path)],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            return True
-    except OSError:
-        return False
-    return False
-
-
-def restore_membership(target: dict[str, Any], client: dict[str, Any]) -> None:
-    address = str(client.get("address", ""))
-    if not address:
-        return
-    selector = f"address:{address}"
-    try:
-        workspace = int(target.get("workspace", 1))
-    except (TypeError, ValueError):
-        workspace = 1
-    dispatch("movetoworkspacesilent", str(max(1, workspace)) + "," + selector)
-
-    current_floating = bool(client.get("floating", False))
-    wanted_floating = bool(target.get("floating", False))
-    if current_floating != wanted_floating:
-        dispatch("togglefloating", selector)
-
-    current_pinned = bool(client.get("pinned", False))
-    wanted_pinned = bool(target.get("pinned", False))
-    if current_pinned != wanted_pinned:
-        dispatch("pin", selector)
-
-
-def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
-    address = str(client.get("address", ""))
-    if not address:
-        return
-    selector = f"address:{address}"
-    wanted_floating = bool(target.get("floating", False))
-
-    size = normalize_pair(target.get("size"))
-    at = normalize_pair(target.get("at"))
-    if wanted_floating:
-        if size[0] > 0 and size[1] > 0:
-            dispatch("resizewindowpixel", f"exact {size[0]} {size[1]},{selector}")
-        dispatch("movewindowpixel", f"exact {at[0]} {at[1]},{selector}")
-    elif size[0] > 0 and size[1] > 0:
-        dispatch("resizewindowpixel", f"exact {size[0]} {size[1]},{selector}")
-
-    try:
-        fullscreen = int(target.get("fullscreen", 0) or 0)
-    except (TypeError, ValueError):
-        fullscreen = 0
-    try:
-        current_fullscreen = int(client.get("fullscreen", 0) or 0)
-    except (TypeError, ValueError):
-        current_fullscreen = 0
-    if fullscreen != current_fullscreen:
-        dispatch("focuswindow", selector)
-        dispatch("fullscreenstate", f"{fullscreen} {fullscreen}")
-
-
-def workspace_order(windows: list[dict[str, Any]], active_workspace: int) -> list[int]:
-    workspaces: set[int] = set()
-    for item in windows:
-        try:
-            workspace = int(item.get("workspace", 1) or 1)
-        except (TypeError, ValueError):
-            workspace = 1
-        workspaces.add(max(1, workspace))
-    return sorted(workspaces, key=lambda workspace: (workspace != active_workspace, workspace))
-
-
-def restore_workspace(targets: list[dict[str, Any]], claimed: set[str]) -> None:
-    restored: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    pending: list[dict[str, Any]] = []
-
-    clients = hypr_json("clients")
-    for target in targets:
-        client = matching_client(target, claimed, clients)
-        if client is None:
-            if launch_target(target):
-                pending.append(target)
-            continue
-        address = str(client.get("address", ""))
-        if address:
-            claimed.add(address)
-        restore_membership(target, client)
-        restored.append((target, client))
-
-    # Applications on one workspace launch together. This caps startup wait at
-    # one timeout per workspace rather than one timeout per application.
-    deadline = time.monotonic() + RESTORE_WAIT_SECONDS
-    while pending and time.monotonic() < deadline:
-        clients = hypr_json("clients")
-        remaining: list[dict[str, Any]] = []
-        for target in pending:
-            client = matching_client(target, claimed, clients)
-            if client is None:
-                remaining.append(target)
-                continue
-            address = str(client.get("address", ""))
-            if address:
-                claimed.add(address)
-            restore_membership(target, client)
-            restored.append((target, client))
-        pending = remaining
-        if pending:
-            time.sleep(RESTORE_POLL_SECONDS)
-
-    # Size after the complete workspace exists, otherwise each later tiled
-    # window changes the dimensions of windows restored before it.
-    for pass_number in range(2):
-        for target, client in restored:
-            restore_geometry(target, client)
-        if pass_number == 0 and len(restored) > 1:
-            time.sleep(0.1)
-
-
-def restore() -> bool:
-    payload = read_json(SESSION_FILE, {})
-    if payload.get("schemaVersion") != SCHEMA_VERSION:
-        return False
-    windows = payload.get("windows")
-    if not isinstance(windows, list):
-        return False
-
-    try:
-        active_workspace = int(payload.get("activeWorkspace", 1))
-    except (TypeError, ValueError):
-        active_workspace = 1
-    active_workspace = max(1, active_workspace)
-
-    targets = sorted(
-        (item for item in windows if isinstance(item, dict)),
-        key=lambda item: safe_int(item.get("order", 0), 0),
-    )
-    claimed: set[str] = set()
-    dispatch("workspace", str(active_workspace))
-    for workspace in workspace_order(targets, active_workspace):
-        workspace_targets = [
-            target for target in targets
-            if max(1, safe_int(target.get("workspace", 1), 1)) == workspace
-        ]
-        monitor_name = next(
-            (str(target.get("monitorName", "")) for target in workspace_targets if target.get("monitorName")),
-            "",
-        )
-        if monitor_name:
-            dispatch("moveworkspacetomonitor", str(workspace), monitor_name)
-        restore_workspace(workspace_targets, claimed)
-        # Applications may request focus as they open. Return the user to the
-        # first restored screen while later workspaces continue in order.
-        dispatch("workspace", str(active_workspace))
-    return True
-
-
-def already_restored_this_boot() -> bool:
-    boot_id = current_boot_id()
-    try:
-        return BOOT_MARKER.read_text(encoding="utf-8").strip() == boot_id
-    except OSError:
-        return False
-
-
-def mark_restored_this_boot() -> None:
-    BOOT_MARKER.write_text(current_boot_id() + "\n", encoding="utf-8")
-    os.chmod(BOOT_MARKER, 0o600)
-
-
-def snapshot_due() -> bool:
-    try:
-        last = float(LAST_SNAPSHOT.read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
-        return True
-    return time.monotonic() - last >= AUTO_SNAPSHOT_SECONDS
-
-
-def auto() -> None:
-    if not restore_enabled():
-        # FRESH is non-destructive: skip restore and preserve the saved session.
-        # Mark this boot so turning SAVE back on cannot resurrect the old setup
-        # in the middle of a running desktop.
-        if not already_restored_this_boot():
-            mark_restored_this_boot()
-        print("fresh")
-        return
-    if not already_restored_this_boot():
-        # The shell starts before Hyprland IPC is always ready. Never mark the
-        # boot handled or overwrite the previous snapshot while IPC is absent.
-        if not isinstance(hypr_json("clients"), list):
-            print("waiting")
-            return
-        payload = read_json(SESSION_FILE, {})
-        has_snapshot = (
-            payload.get("schemaVersion") == SCHEMA_VERSION
-            and isinstance(payload.get("windows"), list)
-        )
-        handled = restore() if has_snapshot else snapshot()
-        if not handled:
-            print("waiting")
-            return
-        mark_restored_this_boot()
-        # Give restored applications time to finish creating secondary windows
-        # before periodic SAVE snapshots can replace the previous session.
-        LAST_SNAPSHOT.write_text(str(time.monotonic()), encoding="utf-8")
-    elif snapshot_due():
-        snapshot()
-    print("restore")
-
-
-def main(argv: list[str]) -> int:
-    ensure_dirs()
-    command = argv[1] if len(argv) > 1 else "status"
-    with LOCK_FILE.open("a+", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        if command == "status":
-            print("restore" if restore_enabled() else "fresh")
-        elif command == "auto":
-            auto()
-        elif command == "snapshot":
-            if not snapshot():
-                print("waiting")
-                return 1
-            print("saved")
-        elif command == "restore":
-            if not restore():
-                print("unavailable")
-                return 1
-            print("restored")
-        elif command == "set" and len(argv) == 3:
-            if argv[2] == "restore":
-                set_restore_enabled(True)
-                print("restore")
-            elif argv[2] == "fresh":
-                set_restore_enabled(False)
-                print("fresh")
-            else:
-                return 2
-        else:
-            return 2
-    return 0
-
+# Functions created by runpy resolve their globals through this dictionary, so
+# replacing the launch function here changes only the app-spawn step. The core
+# still performs client matching and movetoworkspacesilent afterward as a
+# fallback for applications that fork or ignore Hyprland's one-shot exec rule.
+core["launch_target"] = launch_target
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(core["main"](sys.argv))
