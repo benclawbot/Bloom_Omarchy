@@ -24,7 +24,6 @@ Item {
   readonly property string userWallpaperRoot: bloomConfigDir + "/wallpapers"
   readonly property string stateDir: stateHome + "/omarchy-bloom"
   readonly property string eventFile: runtimeHome + "/omarchy-bloom/agent-events.jsonl"
-  readonly property string workspaceBgCommand: root.filesystemPath(String(Qt.resolvedUrl("scripts/bloom-workspace-bg")))
 
   property var sceneList: Scenes.all()
   readonly property var workspaceSceneIds: ["forge", "hush", "library", "afterglow", "orbit"]
@@ -46,7 +45,6 @@ Item {
   property bool startupOpenHandled: false
   property bool configLoaded: false
   property bool rescanQueued: false
-  property double lastActiveToggleAt: 0
   property bool sceneWriteInProgress: false
   property int revision: 0
 
@@ -118,22 +116,14 @@ Item {
     wallpaperScan.running = true
   }
 
-  function wallpaperItemForPath(path) {
-    var wanted = String(path || "")
-    for (var i = 0; i < root.wallpapers.length; i++)
-      if (String(root.wallpapers[i].path) === wanted) return root.wallpapers[i]
-    return null
-  }
-
   function chooseWallpaper(advance) {
     var options = WallpaperIndex.forScene(root.wallpapers, root.currentSceneId)
     if (!options.length) return
 
-    // Wallpaper ownership is workspace-scoped. A scene's choice on one
-    // workspace must never become the implicit choice on another workspace.
     var workspace = root.workspaceState[root.currentWorkspaceId]
     var preferred = workspace && workspace.scene === root.currentSceneId
-      ? String(workspace.wallpaper || "") : ""
+      ? String(workspace.wallpaper || "")
+      : String(root.sceneWallpaper[root.currentSceneId] || "")
     var index = -1
     for (var i = 0; i < options.length; i++) {
       if (options[i].path === preferred) {
@@ -147,28 +137,23 @@ Item {
     root.currentWallpaperPath = options[index].path
     root.currentWallpaperTitle = options[index].title
     root.applyWallpaperToDesktop(root.currentWallpaperPath)
+    var next = ({})
+    for (var key in root.sceneWallpaper) next[key] = root.sceneWallpaper[key]
+    next[root.currentSceneId] = root.currentWallpaperPath
+    root.sceneWallpaper = next
     root.rememberWorkspaceState()
-  }
-
-  function selectWallpaper(path) {
-    var item = root.wallpaperItemForPath(path)
-    if (!item) return false
-    root.currentWallpaperPath = String(item.path)
-    root.currentWallpaperTitle = String(item.title || WallpaperIndex.titleFor(item.path))
-    root.applyWallpaperToDesktop(root.currentWallpaperPath)
-    root.rememberWorkspaceState()
-    root.revision++
-    return true
   }
 
   function applyWallpaperToDesktop(path) {
     var value = root.filesystemPath(path)
-    if (!value || !root.bloomActive || !root.workspaceBgCommand) return
-    // Omarchy's stock setter mutates one global background symlink and
-    // restarts swaybg. Bloom deliberately avoids it here: the helper points
-    // swaybg directly at the focused workspace's saved image, so changing one
-    // workspace does not overwrite the stored choice for any other workspace.
-    Quickshell.execDetached([root.workspaceBgCommand, value])
+    if (!value || !root.bloomActive) return
+    // The live background service alone is ephemeral. This first-party
+    // command persists the current background symlink and updates the live
+    // renderer immediately.
+    var command = root.omarchyPath
+      ? root.omarchyPath + "/bin/omarchy-theme-bg-set"
+      : "omarchy-theme-bg-set"
+    Quickshell.execDetached([command, value])
   }
 
   function setBloomActive(value) {
@@ -181,9 +166,6 @@ Item {
   }
 
   function toggleBloomActive() {
-    var now = Date.now()
-    if (now - root.lastActiveToggleAt < 900) return root.bloomActive
-    root.lastActiveToggleAt = now
     return root.setBloomActive(!root.bloomActive)
   }
 
@@ -233,6 +215,16 @@ Item {
     return "forge"
   }
 
+  function defaultWorkspaceState() {
+    return {
+      "1": { scene: "forge", wallpaper: "" },
+      "2": { scene: "hush", wallpaper: "" },
+      "3": { scene: "library", wallpaper: "" },
+      "4": { scene: "afterglow", wallpaper: "" },
+      "5": { scene: "orbit", wallpaper: "" }
+    }
+  }
+
   function syncFocusedWorkspace(force) {
     if (!root.bloomActive) return
     if (root.sceneWriteInProgress) return
@@ -245,14 +237,17 @@ Item {
     if (saved && Scenes.contains(saved.scene)) {
       root.currentSceneId = saved.scene
       var wanted = String(saved.wallpaper || "")
-      var item = root.wallpaperItemForPath(wanted)
-      if (item) {
-        root.currentWallpaperPath = wanted
-        root.currentWallpaperTitle = String(item.title || WallpaperIndex.titleFor(wanted))
-        root.applyWallpaperToDesktop(wanted)
-      } else {
-        root.chooseWallpaper(false)
+      var found = false
+      for (var i = 0; i < root.wallpapers.length; i++) {
+        if (root.wallpapers[i].path === wanted && String(root.wallpapers[i].sceneId || "") === String(saved.scene)) {
+          root.currentWallpaperPath = wanted
+          root.currentWallpaperTitle = root.wallpapers[i].title
+          found = true
+          break
+        }
       }
+      if (found) root.applyWallpaperToDesktop(wanted)
+      else root.chooseWallpaper(false)
     } else {
       root.currentSceneId = root.defaultSceneForWorkspace(id)
       root.chooseWallpaper(false)
@@ -265,30 +260,36 @@ Item {
     try { parsed = JSON.parse(String(raw || "")) } catch (e) { parsed = null }
     if (!parsed || typeof parsed !== "object") {
       root.firstRun = true
+      // A fresh Bloom installation is useful immediately. The service is
+      // active by default; the user can pause it from either visible toggle.
       root.bloomActive = true
-      root.workspaceState = ({})
+      root.workspaceState = root.defaultWorkspaceState()
       root.configLoaded = true
       root.syncFocusedWorkspace(true)
+      // First-run state is prepared silently; the canvas opens only on click.
       return
     }
     if (Scenes.contains(parsed.scene)) root.currentSceneId = parsed.scene
-    // Keep reading the old sceneWallpaper field for backwards compatibility,
-    // but workspaceState is authoritative from schema v2 onward.
     root.sceneWallpaper = parsed.sceneWallpaper && typeof parsed.sceneWallpaper === "object"
       ? parsed.sceneWallpaper : ({})
-    root.workspaceState = parsed.workspaceState && typeof parsed.workspaceState === "object"
-      ? parsed.workspaceState : ({})
+    // Schema 2 repairs the early Bloom builds that could write one scene to
+    // every workspace after re-reading their own asynchronous config write.
+    root.workspaceState = Number(parsed.schemaVersion || 0) >= 2
+      && parsed.workspaceState && typeof parsed.workspaceState === "object"
+      ? parsed.workspaceState : root.defaultWorkspaceState()
     root.firstRun = false
     root.bloomActive = parsed.bloomActive !== false
     root.onboardingComplete = parsed.onboardingComplete === true
     root.launchAtStartup = parsed.launchAtStartup === true
     root.configLoaded = true
     root.syncFocusedWorkspace(true)
+    // Startup remains background-only, even when Open at login is enabled.
   }
 
   function scheduleStartupOpen() {
     if (root.startupOpenHandled) return
     root.startupOpenHandled = true
+    // Intentionally no-op: never surprise the user with a startup modal.
   }
 
   function setLaunchAtStartup(value) {
@@ -361,10 +362,55 @@ Item {
   function demoAgents() {
     var now = Date.now()
     return [
-      AgentStore.normalize({ id: "demo-codex", provider: "codex", project: "bloom", branch: "main", status: "working", summary: "Polishing the focus rail", detail: "Refactoring the signal path", progress: 0.72, updatedAt: now - 10000, orbit: 0 }),
-      AgentStore.normalize({ id: "demo-claude", provider: "claude", project: "atlas", branch: "experiment/quiet", status: "attention", summary: "One choice needs your eye", detail: "A diff is ready for review", progress: 0.58, attention: true, updatedAt: now - 34000, orbit: 1 }),
-      AgentStore.normalize({ id: "demo-gemini", provider: "gemini", project: "lumen", branch: "docs/launch", status: "waiting", summary: "Waiting on a design token", detail: "No action until you switch scenes", progress: 0.31, updatedAt: now - 62000, orbit: 2 }),
-      AgentStore.normalize({ id: "demo-opencode", provider: "opencode", project: "signal", branch: "fix/pulse", status: "working", summary: "Running the smoke suite", detail: "42 checks in motion", progress: 0.86, updatedAt: now - 9000, orbit: 3 })
+      AgentStore.normalize({
+        id: "demo-codex",
+        provider: "codex",
+        project: "bloom",
+        branch: "main",
+        status: "working",
+        summary: "Polishing the focus rail",
+        detail: "Refactoring the signal path",
+        progress: 0.72,
+        updatedAt: now - 10000,
+        orbit: 0
+      }),
+      AgentStore.normalize({
+        id: "demo-claude",
+        provider: "claude",
+        project: "atlas",
+        branch: "experiment/quiet",
+        status: "attention",
+        summary: "One choice needs your eye",
+        detail: "A diff is ready for review",
+        progress: 0.58,
+        attention: true,
+        updatedAt: now - 34000,
+        orbit: 1
+      }),
+      AgentStore.normalize({
+        id: "demo-gemini",
+        provider: "gemini",
+        project: "lumen",
+        branch: "docs/launch",
+        status: "waiting",
+        summary: "Waiting on a design token",
+        detail: "No action until you switch scenes",
+        progress: 0.31,
+        updatedAt: now - 62000,
+        orbit: 2
+      }),
+      AgentStore.normalize({
+        id: "demo-opencode",
+        provider: "opencode",
+        project: "signal",
+        branch: "fix/pulse",
+        status: "working",
+        summary: "Running the smoke suite",
+        detail: "42 checks in motion",
+        progress: 0.86,
+        updatedAt: now - 9000,
+        orbit: 3
+      })
     ]
   }
 
@@ -409,15 +455,17 @@ Item {
   FileView {
     id: configFile
     path: root.bloomConfigDir + "/config.json"
-    watchChanges: true
+    // Load configuration once. Watching our own atomic writes caused stale
+    // snapshots to be parsed back into live state, reverting UI actions.
+    watchChanges: false
     atomicWrites: true
     printErrors: false
     onLoaded: root.parseConfig(text())
-    onFileChanged: root.parseConfig(configFile.text())
     onLoadFailed: {
       root.firstRun = true
       root.configLoaded = true
       root.scheduleConfigSave()
+      // A missing config must not summon a modal during boot.
     }
   }
 
@@ -501,7 +549,6 @@ Item {
     function nextScene(): string { return root.nextScene(1) }
     function previousScene(): string { return root.nextScene(-1) }
     function nextWallpaper(): string { return root.nextWallpaper() }
-    function wallpaper(path: string): string { return root.selectWallpaper(path) ? root.currentWallpaperPath : "unknown-wallpaper" }
     function refresh(): string { root.refreshWallpapers(); if (!agentScan.running) agentScan.running = true; return "ok" }
     function demo(enabled: string): string {
       root.setDemoMode(enabled === "" ? !root.demoMode : enabled === "true" || enabled === "1")
