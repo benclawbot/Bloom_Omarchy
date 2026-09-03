@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Copy a user-selected wallpaper into Bloom's persistent scene library."""
+
+from __future__ import annotations
+
+import os
+import pathlib
+import shutil
+import sys
+
+
+SCENES = {"forge", "hush", "library", "afterglow", "orbit"}
+EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".avif"}
+HOME = pathlib.Path.home()
+CONFIG_HOME = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+WALLPAPER_ROOT = CONFIG_HOME / "omarchy-bloom" / "wallpapers"
+
+
+def unique_destination(directory: pathlib.Path, source: pathlib.Path) -> pathlib.Path:
+    candidate = directory / source.name
+    if not candidate.exists():
+        return candidate
+    try:
+        if candidate.samefile(source):
+            return candidate
+    except OSError:
+        pass
+    for number in range(2, 10_000):
+        candidate = directory / f"{source.stem}-{number}{source.suffix.lower()}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError("Could not choose a unique wallpaper name")
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 3:
+        print("Choose one wallpaper to import", file=sys.stderr)
+        return 2
+    source = pathlib.Path(argv[1]).expanduser()
+    scene = argv[2]
+    if scene not in SCENES:
+        print("The selected Bloom scene is not valid", file=sys.stderr)
+        return 2
+    if source.suffix.lower() not in EXTENSIONS or not source.is_file():
+        print("Choose a PNG, JPG, WEBP, or AVIF image", file=sys.stderr)
+        return 2
+
+    directory = WALLPAPER_ROOT / scene
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    destination = unique_destination(directory, source)
+    try:
+        if destination.resolve() != source.resolve():
+            shutil.copy2(source, destination)
+    except OSError as error:
+        print(f"Could not import wallpaper: {error}", file=sys.stderr)
+        return 1
+    os.chmod(destination, 0o600)
+    print(destination)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

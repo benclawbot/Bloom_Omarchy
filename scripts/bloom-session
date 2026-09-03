@@ -20,8 +20,9 @@ from typing import Any
 
 APP_NAME = "omarchy-bloom"
 SCHEMA_VERSION = 1
-AUTO_SNAPSHOT_SECONDS = 4.0
+AUTO_SNAPSHOT_SECONDS = 15.0
 RESTORE_WAIT_SECONDS = 8.0
+RESTORE_POLL_SECONDS = 0.15
 
 HOME = pathlib.Path.home()
 STATE_HOME = pathlib.Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state"))
@@ -197,10 +198,27 @@ def normalize_pair(value: Any) -> list[int]:
         return [0, 0]
 
 
-def snapshot_clients() -> list[dict[str, Any]]:
+def safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def snapshot_clients() -> list[dict[str, Any]] | None:
     clients = hypr_json("clients")
     if not isinstance(clients, list):
-        return []
+        return None
+    monitors = hypr_json("monitors")
+    monitor_names: dict[int, str] = {}
+    if isinstance(monitors, list):
+        for monitor in monitors:
+            if not isinstance(monitor, dict):
+                continue
+            try:
+                monitor_names[int(monitor.get("id", -1))] = str(monitor.get("name", ""))
+            except (TypeError, ValueError):
+                continue
     saved: list[dict[str, Any]] = []
     for index, client in enumerate(clients):
         if not isinstance(client, dict):
@@ -218,6 +236,10 @@ def snapshot_clients() -> list[dict[str, Any]]:
         initial_class = str(client.get("initialClass", ""))
         executable = process_executable(pid)
         desktop_id = find_desktop_id(window_class, initial_class, executable)
+        try:
+            monitor_id = int(client.get("monitor", -1))
+        except (TypeError, ValueError):
+            monitor_id = -1
         saved.append(
             {
                 "order": index,
@@ -227,9 +249,11 @@ def snapshot_clients() -> list[dict[str, Any]]:
                 "initialTitle": str(client.get("initialTitle", "")),
                 "workspace": workspace_id,
                 "workspaceName": str(workspace.get("name", "")),
-                "monitor": int(client.get("monitor", -1) or -1),
+                "monitor": monitor_id,
+                "monitorName": monitor_names.get(monitor_id, ""),
                 "floating": bool(client.get("floating", False)),
                 "fullscreen": int(client.get("fullscreen", 0) or 0),
+                "pinned": bool(client.get("pinned", False)),
                 "at": normalize_pair(client.get("at")),
                 "size": normalize_pair(client.get("size")),
                 "launch": {
@@ -243,6 +267,8 @@ def snapshot_clients() -> list[dict[str, Any]]:
 
 def snapshot() -> bool:
     clients = snapshot_clients()
+    if clients is None:
+        return False
     active = hypr_json("activeworkspace")
     active_workspace = 1
     if isinstance(active, dict):
@@ -275,23 +301,55 @@ def target_identity(target: dict[str, Any]) -> tuple[str, str]:
     )
 
 
-def matching_client(target: dict[str, Any], claimed: set[str]) -> dict[str, Any] | None:
-    clients = hypr_json("clients")
+def match_score(target: dict[str, Any], client: dict[str, Any]) -> int:
+    wanted_initial, wanted_class = target_identity(target)
+    actual_initial, actual_class = client_identity(client)
+    score = 0
+    if wanted_initial and actual_initial == wanted_initial:
+        score += 100
+    if wanted_class and actual_class == wanted_class:
+        score += 80
+    if wanted_initial and actual_class == wanted_initial:
+        score += 30
+    if wanted_class and actual_initial == wanted_class:
+        score += 30
+    if score == 0:
+        return -1
+
+    wanted_initial_title = str(target.get("initialTitle", "")).casefold()
+    wanted_title = str(target.get("title", "")).casefold()
+    if wanted_initial_title and str(client.get("initialTitle", "")).casefold() == wanted_initial_title:
+        score += 24
+    if wanted_title and str(client.get("title", "")).casefold() == wanted_title:
+        score += 16
+    try:
+        if int(client.get("workspace", {}).get("id", 0)) == int(target.get("workspace", 0)):
+            score += 4
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return score
+
+
+def matching_client(
+    target: dict[str, Any], claimed: set[str], clients: Any = None
+) -> dict[str, Any] | None:
+    if clients is None:
+        clients = hypr_json("clients")
     if not isinstance(clients, list):
         return None
-    wanted = target_identity(target)
+    best: dict[str, Any] | None = None
+    best_score = -1
     for client in clients:
         if not isinstance(client, dict):
             continue
         address = str(client.get("address", ""))
         if not address or address in claimed:
             continue
-        identity = client_identity(client)
-        if wanted[0] and identity[0] == wanted[0]:
-            return client
-        if wanted[1] and identity[1] == wanted[1]:
-            return client
-    return None
+        score = match_score(target, client)
+        if score > best_score:
+            best = client
+            best_score = score
+    return best
 
 
 def valid_desktop_id(desktop_id: str) -> bool:
@@ -332,17 +390,7 @@ def launch_target(target: dict[str, Any]) -> bool:
     return False
 
 
-def wait_for_client(target: dict[str, Any], claimed: set[str]) -> dict[str, Any] | None:
-    deadline = time.monotonic() + RESTORE_WAIT_SECONDS
-    while time.monotonic() < deadline:
-        found = matching_client(target, claimed)
-        if found:
-            return found
-        time.sleep(0.15)
-    return None
-
-
-def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
+def restore_membership(target: dict[str, Any], client: dict[str, Any]) -> None:
     address = str(client.get("address", ""))
     if not address:
         return
@@ -358,6 +406,19 @@ def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
     if current_floating != wanted_floating:
         dispatch("togglefloating", selector)
 
+    current_pinned = bool(client.get("pinned", False))
+    wanted_pinned = bool(target.get("pinned", False))
+    if current_pinned != wanted_pinned:
+        dispatch("pin", selector)
+
+
+def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
+    address = str(client.get("address", ""))
+    if not address:
+        return
+    selector = f"address:{address}"
+    wanted_floating = bool(target.get("floating", False))
+
     size = normalize_pair(target.get("size"))
     at = normalize_pair(target.get("at"))
     if wanted_floating:
@@ -371,8 +432,70 @@ def restore_geometry(target: dict[str, Any], client: dict[str, Any]) -> None:
         fullscreen = int(target.get("fullscreen", 0) or 0)
     except (TypeError, ValueError):
         fullscreen = 0
-    if fullscreen:
-        dispatch("fullscreenstate", f"{fullscreen} {fullscreen},{selector}")
+    try:
+        current_fullscreen = int(client.get("fullscreen", 0) or 0)
+    except (TypeError, ValueError):
+        current_fullscreen = 0
+    if fullscreen != current_fullscreen:
+        dispatch("focuswindow", selector)
+        dispatch("fullscreenstate", f"{fullscreen} {fullscreen}")
+
+
+def workspace_order(windows: list[dict[str, Any]], active_workspace: int) -> list[int]:
+    workspaces: set[int] = set()
+    for item in windows:
+        try:
+            workspace = int(item.get("workspace", 1) or 1)
+        except (TypeError, ValueError):
+            workspace = 1
+        workspaces.add(max(1, workspace))
+    return sorted(workspaces, key=lambda workspace: (workspace != active_workspace, workspace))
+
+
+def restore_workspace(targets: list[dict[str, Any]], claimed: set[str]) -> None:
+    restored: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    pending: list[dict[str, Any]] = []
+
+    clients = hypr_json("clients")
+    for target in targets:
+        client = matching_client(target, claimed, clients)
+        if client is None:
+            if launch_target(target):
+                pending.append(target)
+            continue
+        address = str(client.get("address", ""))
+        if address:
+            claimed.add(address)
+        restore_membership(target, client)
+        restored.append((target, client))
+
+    # Applications on one workspace launch together. This caps startup wait at
+    # one timeout per workspace rather than one timeout per application.
+    deadline = time.monotonic() + RESTORE_WAIT_SECONDS
+    while pending and time.monotonic() < deadline:
+        clients = hypr_json("clients")
+        remaining: list[dict[str, Any]] = []
+        for target in pending:
+            client = matching_client(target, claimed, clients)
+            if client is None:
+                remaining.append(target)
+                continue
+            address = str(client.get("address", ""))
+            if address:
+                claimed.add(address)
+            restore_membership(target, client)
+            restored.append((target, client))
+        pending = remaining
+        if pending:
+            time.sleep(RESTORE_POLL_SECONDS)
+
+    # Size after the complete workspace exists, otherwise each later tiled
+    # window changes the dimensions of windows restored before it.
+    for pass_number in range(2):
+        for target, client in restored:
+            restore_geometry(target, client)
+        if pass_number == 0 and len(restored) > 1:
+            time.sleep(0.1)
 
 
 def restore() -> bool:
@@ -383,29 +506,33 @@ def restore() -> bool:
     if not isinstance(windows, list):
         return False
 
-    claimed: set[str] = set()
-    targets = sorted(
-        (item for item in windows if isinstance(item, dict)),
-        key=lambda item: (int(item.get("workspace", 1) or 1), int(item.get("order", 0) or 0)),
-    )
-    for target in targets:
-        client = matching_client(target, claimed)
-        if client is None:
-            if not launch_target(target):
-                continue
-            client = wait_for_client(target, claimed)
-        if client is None:
-            continue
-        address = str(client.get("address", ""))
-        if address:
-            claimed.add(address)
-        restore_geometry(target, client)
-
     try:
         active_workspace = int(payload.get("activeWorkspace", 1))
     except (TypeError, ValueError):
         active_workspace = 1
-    dispatch("workspace", str(max(1, active_workspace)))
+    active_workspace = max(1, active_workspace)
+
+    targets = sorted(
+        (item for item in windows if isinstance(item, dict)),
+        key=lambda item: safe_int(item.get("order", 0), 0),
+    )
+    claimed: set[str] = set()
+    dispatch("workspace", str(active_workspace))
+    for workspace in workspace_order(targets, active_workspace):
+        workspace_targets = [
+            target for target in targets
+            if max(1, safe_int(target.get("workspace", 1), 1)) == workspace
+        ]
+        monitor_name = next(
+            (str(target.get("monitorName", "")) for target in workspace_targets if target.get("monitorName")),
+            "",
+        )
+        if monitor_name:
+            dispatch("moveworkspacetomonitor", str(workspace), monitor_name)
+        restore_workspace(workspace_targets, claimed)
+        # Applications may request focus as they open. Return the user to the
+        # first restored screen while later workspaces continue in order.
+        dispatch("workspace", str(active_workspace))
     return True
 
 
@@ -440,11 +567,24 @@ def auto() -> None:
         print("fresh")
         return
     if not already_restored_this_boot():
-        # Mark before restoring. If an application crashes the manager during
-        # restore, a second bar instance must not start a launch storm.
+        # The shell starts before Hyprland IPC is always ready. Never mark the
+        # boot handled or overwrite the previous snapshot while IPC is absent.
+        if not isinstance(hypr_json("clients"), list):
+            print("waiting")
+            return
+        payload = read_json(SESSION_FILE, {})
+        has_snapshot = (
+            payload.get("schemaVersion") == SCHEMA_VERSION
+            and isinstance(payload.get("windows"), list)
+        )
+        handled = restore() if has_snapshot else snapshot()
+        if not handled:
+            print("waiting")
+            return
         mark_restored_this_boot()
-        restore()
-        snapshot()
+        # Give restored applications time to finish creating secondary windows
+        # before periodic SAVE snapshots can replace the previous session.
+        LAST_SNAPSHOT.write_text(str(time.monotonic()), encoding="utf-8")
     elif snapshot_due():
         snapshot()
     print("restore")
@@ -460,10 +600,14 @@ def main(argv: list[str]) -> int:
         elif command == "auto":
             auto()
         elif command == "snapshot":
-            snapshot()
+            if not snapshot():
+                print("waiting")
+                return 1
             print("saved")
         elif command == "restore":
-            restore()
+            if not restore():
+                print("unavailable")
+                return 1
             print("restored")
         elif command == "set" and len(argv) == 3:
             if argv[2] == "restore":

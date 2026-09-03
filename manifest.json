@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "org.bloom.omarchy",
   "name": "Bloom",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "Bloom for Omarchy",
   "description": "A cinematic scene switcher, live Agent Constellation, and safe desktop session restore for Omarchy Quattro.",
   "license": "MIT",

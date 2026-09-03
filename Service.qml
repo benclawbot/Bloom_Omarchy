@@ -24,6 +24,8 @@ Item {
   readonly property string userWallpaperRoot: bloomConfigDir + "/wallpapers"
   readonly property string stateDir: stateHome + "/omarchy-bloom"
   readonly property string eventFile: runtimeHome + "/omarchy-bloom/agent-events.jsonl"
+  readonly property string sessionCommand: root.filesystemPath(String(Qt.resolvedUrl("scripts/bloom-session")))
+  readonly property string wallpaperImportCommand: root.filesystemPath(String(Qt.resolvedUrl("scripts/bloom-wallpaper-import")))
 
   property var sceneList: Scenes.all()
   readonly property var workspaceSceneIds: ["forge", "hush", "library", "afterglow", "orbit"]
@@ -46,6 +48,12 @@ Item {
   property bool configLoaded: false
   property bool rescanQueued: false
   property bool sceneWriteInProgress: false
+  property bool restoreLastSetup: true
+  property bool snapshotAfterModeChange: false
+  property bool sessionTopologyDirty: false
+  property string sessionMessage: ""
+  property string pendingImportedWallpaper: ""
+  property string wallpaperImportMessage: ""
   property int revision: 0
 
   readonly property var currentScene: Scenes.get(currentSceneId)
@@ -104,8 +112,40 @@ Item {
     }
 
     root.wallpapers = combined
-    root.syncFocusedWorkspace(true)
+    if (root.pendingImportedWallpaper) {
+      var imported = root.pendingImportedWallpaper
+      root.pendingImportedWallpaper = ""
+      if (!root.selectWallpaperPath(imported)) root.syncFocusedWorkspace(true)
+    } else {
+      root.syncFocusedWorkspace(true)
+    }
     root.revision++
+  }
+
+  function selectWallpaperPath(path) {
+    var wanted = root.filesystemPath(path)
+    for (var i = 0; i < root.wallpapers.length; i++) {
+      if (root.filesystemPath(root.wallpapers[i].path) !== wanted) continue
+      root.currentWallpaperPath = root.wallpapers[i].path
+      root.currentWallpaperTitle = root.wallpapers[i].title
+      root.applyWallpaperToDesktop(root.currentWallpaperPath)
+      var next = ({})
+      for (var key in root.sceneWallpaper) next[key] = root.sceneWallpaper[key]
+      next[root.currentSceneId] = root.currentWallpaperPath
+      root.sceneWallpaper = next
+      root.rememberWorkspaceState()
+      return true
+    }
+    return false
+  }
+
+  function importWallpaper(path) {
+    var source = root.filesystemPath(path)
+    if (!source || wallpaperImport.running) return false
+    root.wallpaperImportMessage = "Importing wallpaper…"
+    wallpaperImport.command = ["python3", root.wallpaperImportCommand, source, root.currentSceneId]
+    wallpaperImport.running = true
+    return true
   }
 
   function refreshWallpapers() {
@@ -239,7 +279,8 @@ Item {
       var wanted = String(saved.wallpaper || "")
       var found = false
       for (var i = 0; i < root.wallpapers.length; i++) {
-        if (root.wallpapers[i].path === wanted && String(root.wallpapers[i].sceneId || "") === String(saved.scene)) {
+        if (root.wallpapers[i].path === wanted
+            && (!root.wallpapers[i].sceneId || String(root.wallpapers[i].sceneId) === String(saved.scene))) {
           root.currentWallpaperPath = wanted
           root.currentWallpaperTitle = root.wallpapers[i].title
           found = true
@@ -302,6 +343,35 @@ Item {
 
   function toggleLaunchAtStartup() {
     return root.setLaunchAtStartup(!root.launchAtStartup)
+  }
+
+  function applySessionOutput(raw) {
+    var value = String(raw || "").trim()
+    if (value === "fresh") root.restoreLastSetup = false
+    else if (value === "restore") root.restoreLastSetup = true
+    if (value) root.sessionMessage = value
+    root.revision++
+  }
+
+  function setSessionMode(restore, saveNow) {
+    if (sessionModeUpdate.running) return false
+    root.restoreLastSetup = !!restore
+    root.snapshotAfterModeChange = !!restore && !!saveNow
+    sessionModeUpdate.command = ["python3", root.sessionCommand, "set", restore ? "restore" : "fresh"]
+    sessionModeUpdate.running = true
+    root.revision++
+    return true
+  }
+
+  function toggleSessionMode() {
+    if (root.restoreLastSetup) return root.setSessionMode(false, false)
+    return root.setSessionMode(true, true)
+  }
+
+  function queueSessionSnapshot() {
+    if (!root.restoreLastSetup) return
+    root.sessionTopologyDirty = true
+    sessionTopologyTimer.restart()
   }
 
   function completeOnboarding() {
@@ -494,6 +564,62 @@ Item {
   }
 
   Process {
+    id: wallpaperImport
+    command: ["true"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var imported = String(text || "").trim()
+        if (imported) {
+          root.pendingImportedWallpaper = imported
+          root.wallpaperImportMessage = "Wallpaper added"
+          root.refreshWallpapers()
+        }
+      }
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var message = String(text || "").trim()
+        if (message) root.wallpaperImportMessage = message
+      }
+    }
+  }
+
+  Process {
+    id: sessionAuto
+    command: ["python3", root.sessionCommand, "auto"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.applySessionOutput(text)
+    }
+  }
+
+  Process {
+    id: sessionModeUpdate
+    command: ["true"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.applySessionOutput(text)
+    }
+    onExited: {
+      if (root.snapshotAfterModeChange) {
+        root.snapshotAfterModeChange = false
+        if (!sessionSnapshot.running) sessionSnapshot.running = true
+      }
+    }
+  }
+
+  Process {
+    id: sessionSnapshot
+    command: ["python3", root.sessionCommand, "snapshot"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.sessionMessage = String(text || "").trim()
+    }
+  }
+
+  Process {
     id: agentScan
     command: ["ps", "-eo", "pid=,comm=,args="]
     stdout: StdioCollector {
@@ -514,6 +640,34 @@ Item {
   }
 
   Timer {
+    id: sessionTimer
+    interval: 5000
+    repeat: true
+    running: true
+    triggeredOnStart: true
+    onTriggered: {
+      if (!sessionAuto.running && !sessionModeUpdate.running && !sessionSnapshot.running)
+        sessionAuto.running = true
+    }
+  }
+
+  Timer {
+    id: sessionTopologyTimer
+    interval: 2500
+    repeat: false
+    onTriggered: {
+      if (!root.sessionTopologyDirty || !root.restoreLastSetup) {
+        root.sessionTopologyDirty = false
+      } else if (sessionAuto.running || sessionModeUpdate.running || sessionSnapshot.running) {
+        restart()
+      } else {
+        root.sessionTopologyDirty = false
+        sessionSnapshot.running = true
+      }
+    }
+  }
+
+  Timer {
     id: configSaveTimer
     interval: 500
     repeat: false
@@ -530,6 +684,11 @@ Item {
   Connections {
     target: Hyprland
     function onFocusedWorkspaceChanged() { root.syncFocusedWorkspace(false) }
+  }
+
+  Connections {
+    target: Hyprland.toplevels
+    function onValuesChanged() { root.queueSessionSnapshot() }
   }
 
   Timer {

@@ -46,6 +46,9 @@ def main() -> int:
     if not (ROOT / "docs/OMARCHY_BLOOM_SPEC.md").exists():
         raise SystemExit("implementation spec is not stored in the repository")
     service = (ROOT / "Service.qml").read_text(encoding="utf-8")
+    bar = (ROOT / "BarWidget.qml").read_text(encoding="utf-8")
+    overlay = (ROOT / "Overlay.qml").read_text(encoding="utf-8")
+    session = (ROOT / "scripts/bloom-session").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     if (
         "bloomActive" not in service
@@ -57,6 +60,12 @@ def main() -> int:
         or "watchChanges: false" not in service
         or "onFileChanged: root.parseConfig" in service
         or "omarchy-theme-bg-set" not in service
+        or "sessionAuto" not in service
+        or "onValuesChanged() { root.queueSessionSnapshot() }" not in service
+        or '"SAVE" : "FRESH"' not in bar
+        or "wallpaperFileDialog.open()" not in overlay
+        or "restore_workspace" not in session
+        or not (ROOT / "scripts/bloom-wallpaper-import").exists()
         or "modal by itself" not in readme
     ):
         raise SystemExit("background lifecycle or workspace persistence contract is incomplete")

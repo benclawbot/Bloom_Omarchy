@@ -47,11 +47,9 @@ function fromLines(raw) {
 function forScene(items, sceneId) {
   var exact = []
   var neutral = []
-  var other = []
   for (var i = 0; i < (items || []).length; i++) {
     if (items[i].sceneId === sceneId) exact.push(items[i])
     else if (!items[i].sceneId) neutral.push(items[i])
-    else other.push(items[i])
   }
-  return exact.concat(neutral, other)
+  return exact.concat(neutral)
 }

@@ -60,5 +60,32 @@ BarWidget {
       }
     }
 
+    BarIconButton {
+      id: activeToggle
+      bar: root.bar
+      text: root.bloom && root.bloom.bloomActive ? "ON" : "OFF"
+      // Normal modes blend with the bar; only paused mode is urgent/red.
+      active: !!root.bloom && !root.bloom.bloomActive
+      tooltipText: root.bloom && root.bloom.bloomActive
+        ? "Bloom is active · click to pause"
+        : "Bloom is paused · click to activate"
+      onPressed: function() {
+        if (root.bloom) root.bloom.toggleBloomActive()
+      }
+    }
+
+    BarIconButton {
+      id: sessionToggle
+      bar: root.bar
+      text: root.bloom && root.bloom.restoreLastSetup ? "SAVE" : "FRESH"
+      // SAVE is the normal state; FRESH is deliberately highlighted in red.
+      active: !!root.bloom && !root.bloom.restoreLastSetup
+      tooltipText: root.bloom && root.bloom.restoreLastSetup
+        ? "SAVE is on · apps and workspace layouts are saved for the next boot · click to start fresh"
+        : "FRESH is on · the next boot will not reopen apps · click to save this desktop"
+      onPressed: function() {
+        if (root.bloom) root.bloom.toggleSessionMode()
+      }
+    }
   }
 }

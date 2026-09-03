@@ -37,7 +37,7 @@ const rows = wallpapers.forScene([
   { path: "/tmp/neutral.webp", sceneId: "" },
   { path: "/tmp/orbit-a.webp", sceneId: "orbit" }
 ], "forge");
-if (rows.map(row => row.path).join(",") !== "/tmp/forge-a.webp,/tmp/neutral.webp,/tmp/orbit-a.webp")
-  throw new Error("wallpaper ordering failed");
+if (rows.map(row => row.path).join(",") !== "/tmp/forge-a.webp,/tmp/neutral.webp")
+  throw new Error("wallpaper scene filtering failed");
 
 console.log("Bloom model checks passed");

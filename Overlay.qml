@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -111,6 +112,16 @@ Item {
     if (!service) return
     service.setDemoMode(!service.demoMode)
     currentView = "constellation"
+  }
+
+  FileDialog {
+    id: wallpaperFileDialog
+    title: "Choose your own wallpaper"
+    fileMode: FileDialog.OpenFile
+    nameFilters: ["Wallpaper images (*.png *.jpg *.jpeg *.webp *.avif)", "All files (*)"]
+    onAccepted: {
+      if (service) service.importWallpaper(String(selectedFile))
+    }
   }
 
   IpcHandler {
@@ -665,6 +676,36 @@ Item {
                         }
                         MouseArea { anchors.fill: parent; onClicked: if (service) service.nextWallpaper() }
                       }
+
+                      Rectangle {
+                        width: 132
+                        height: 32
+                        radius: 16
+                        color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.15)
+                        border.width: 1
+                        border.color: root.accent
+                        Text {
+                          anchors.centerIn: parent
+                          text: "+  ADD YOUR OWN"
+                          color: root.accent
+                          font.family: Style.font.family
+                          font.pixelSize: 9
+                          font.bold: true
+                          font.letterSpacing: 0.7
+                        }
+                        MouseArea { anchors.fill: parent; onClicked: wallpaperFileDialog.open() }
+                      }
+                    }
+
+                    Text {
+                      visible: !!service && service.wallpaperImportMessage !== ""
+                      anchors.right: parent.right
+                      anchors.bottom: parent.bottom
+                      anchors.margins: 23
+                      text: service ? service.wallpaperImportMessage : ""
+                      color: "#C9D2DE"
+                      font.family: Style.font.family
+                      font.pixelSize: 10
                     }
                   }
                 }

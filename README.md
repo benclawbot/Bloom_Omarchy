@@ -145,6 +145,7 @@ background setter, so it remains after Bloom closes.
 | --- | --- |
 | Click Bloom glyph | Open or close the Bloom canvas |
 | Bloom Active toggle | Pause or resume workspace atmospheres |
+| SAVE / FRESH | Restore and keep saving this desktop, or start clean on the next boot |
 | 1 … 5 | Jump to Forge, Hush, Library, Afterglow, or Orbit |
 | Left / Right | Previous or next scene |
 | N | Next wallpaper |
@@ -167,7 +168,9 @@ Bloom ships ten original, scene-matched wallpapers:
 assets/wallpapers/default/<scene>/*.webp
 ~~~
 
-Add personal wallpapers without touching the repository:
+Use **Add your own** in Bloom's wallpaper view to choose an image. Bloom copies
+it into the current scene's personal folder and selects it immediately. You can
+also add files manually without touching the repository:
 
 ~~~text
 XDG_CONFIG_HOME/omarchy-bloom/wallpapers/
