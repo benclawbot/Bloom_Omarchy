@@ -90,12 +90,11 @@ omarchy plugin update org.bloom.omarchy --yes
 ~~~
 
 `--enable` enables the plugin and Bloom starts shaping workspaces immediately.
-The manifest declares the right bar section, where Bloom appears with a visible
-ON/OFF control. Click the ✦ glyph to open the canvas; the activation toggle
+The manifest declares the right bar section, where Bloom appears as a ✦ glyph.
+Click the glyph to open the canvas; the single activation toggle
 lives in the right-hand Signal panel. No terminal command is part of normal use. On
-a genuinely fresh install, Bloom reveals the canvas once automatically so the
-feature is discoverable; that one-time reveal does not enable future startup
-launches. After that, click the glyph whenever you want to open Bloom. If you are
+a genuinely fresh install, Bloom prepares workspace 1–5 silently in the
+background. Click the glyph whenever you want to open Bloom. If you are
 scripting a non-interactive install, append --yes to accept Omarchy's plugin
 safety prompt.
 
@@ -119,8 +118,8 @@ process/file APIs described below.
 ## How Bloom launches
 
 Enabling the plugin loads Bloom's lightweight service with omarchy-shell and
-turns workspace atmospheres on by default. After the first-run reveal, the
-full canvas stays out of the way until you click the Bloom bar glyph. The
+turns workspace atmospheres on by default. The full canvas stays out of the
+way until you click the Bloom bar glyph. The
 right-hand Signal panel contains the single Bloom Active toggle.
 
 For troubleshooting only, the equivalent direct shell command is:
@@ -206,14 +205,12 @@ bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl next-scene
 bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl next-wallpaper
 bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl active off
 bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl active status
-bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl startup on
-bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl startup status
 ~~~
 
 Copy or symlink it into a directory on your PATH if you want the shorter
-`bloomctl` command for keybindings or menu actions. Use `bloomctl startup off` to disable the
-automatic canvas launch, or `bloomctl active off` to pause Bloom's
-workspace atmospheres. The Signal rail shows the same two toggles.
+`bloomctl` command for keybindings or menu actions. Use `bloomctl active off`
+to pause Bloom's workspace atmospheres. The Signal rail provides the same
+active-state toggle.
 
 ## Omarchy menu extension
 
