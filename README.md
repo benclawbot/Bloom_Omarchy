@@ -5,12 +5,13 @@
 Bloom is a cinematic living-workspace plugin for Omarchy Quattro. It gives
 your desktop five intentional rooms — Forge, Hush, Library, Afterglow, and
 Orbit — then makes your local AI sessions visible as a calm, navigable Agent
-Constellation. Bloom also saves your display configuration across all five
-desktops, restoring each workspace's scene, wallpaper, and atmosphere as you
-move between them.
+Constellation. Bloom also restores your working desktop after reboot: it saves
+which applications were open, which workspaces and monitors they belonged to,
+window placement and state, the active workspace, plus each workspace's scene,
+wallpaper, and atmosphere.
 
 The point is not another dashboard. The point is a desktop that changes its
-posture with you.
+posture with you — and comes back in that posture when you log in again.
 
 ![Bloom canvas preview](docs/assets/bloom-canvas-preview.png)
 
@@ -63,12 +64,15 @@ one overlay canvas, and one bar widget:
 
 1. The Bloom glyph calls the Omarchy shell router with a view payload.
 2. The service owns scenes, persisted selection, wallpaper indexing, agent
-   polling, and the local JSONL event stream.
+   polling, the local JSONL event stream, and desktop-session persistence.
 3. The overlay receives the same service instance and paints the scene canvas,
    wallpaper layer, constellation, keyboard handling, and focus action.
 4. Bundled wallpapers ship inside the plugin. User wallpapers are read from
    XDG_CONFIG_HOME/omarchy-bloom/wallpapers/, with optional scene folders.
-5. No agent data leaves the machine. The plugin has no network client and no
+5. Desktop restore uses Hyprland IPC and conservative application launch
+   identities; it does not replay arbitrary process command lines or environment
+   variables.
+6. No agent data leaves the machine. The plugin has no network client and no
    install hook.
 
 The architecture artwork above is a visual overview; the exact runtime
@@ -139,13 +143,63 @@ assignment; switching to workspace 1–5 restores that workspace's saved
 assignment. The desktop wallpaper is committed through Omarchy's own
 background setter, so it remains after Bloom closes.
 
+## Desktop session restore
+
+Bloom's **SAVE / FRESH** control governs reboot/session restoration separately
+from the **Bloom Active** atmosphere toggle.
+
+With **SAVE** enabled, Bloom continuously snapshots the current Hyprland desktop
+for the next boot. The snapshot records normal application windows, workspace
+number, monitor identity, window order, tiled/floating state, floating geometry,
+pinned/fullscreen state, the active workspace, and a conservative application
+launch identity. Closing an application removes it from later snapshots; opening
+one adds it after the desktop settles.
+
+On the next login Bloom waits for Hyprland IPC, restores the saved active
+workspace first, then reconstructs the remaining workspaces in the background.
+Applications for those later workspaces are launched with Hyprland's silent
+workspace rule so they are created directly on their saved workspace instead of
+briefly appearing on the workspace you are using. Bloom still verifies every
+new window and applies `movetoworkspacesilent` as a fallback for applications
+that fork, reuse an existing process, or otherwise ignore the initial placement.
+Focus is returned to the saved active workspace throughout the restore.
+
+With **FRESH** enabled, Bloom skips application/window restoration on the next
+boot and leaves the previous saved snapshot untouched. Switching back to SAVE
+during that boot starts saving the desktop you are using now; it does not
+suddenly reopen the older session.
+
+Bloom deliberately does **not** persist `/proc/.../cmdline`, arbitrary shell
+commands, environment variables, or application arguments. This avoids turning
+the session file into a replay log containing secrets or one-shot commands.
+Instead it prefers a validated `.desktop` application identity and falls back
+to a safe absolute executable when available.
+
+Desktop placement and application-private state are different layers. Bloom
+restores applications and windows, but the application itself currently owns
+things such as browser tabs, VS Code projects/editor tabs, unsaved buffers,
+terminal working directories and running shells, tmux/zellij sessions, and
+other private in-app state. Applications that already provide their own session
+restore may therefore come back with more context automatically; Bloom does not
+yet serialize that private state itself.
+
+The saved desktop snapshot lives at:
+
+~~~text
+$XDG_STATE_HOME/omarchy-bloom/desktop-session.json
+~~~
+
+which is normally `~/.local/state/omarchy-bloom/desktop-session.json`. See
+[`docs/SESSION_RESTORE.md`](docs/SESSION_RESTORE.md) for the implementation-level
+restore contract and current limitations.
+
 ## Controls
 
 | Key / action | Result |
 | --- | --- |
 | Click Bloom glyph | Open or close the Bloom canvas |
-| Bloom Active toggle | Pause or resume workspace atmospheres |
-| SAVE / FRESH | Restore and keep saving this desktop, or start clean on the next boot |
+| Bloom Active toggle | Pause or resume workspace atmospheres; does not disable desktop SAVE |
+| SAVE / FRESH | Save and restore the desktop across reboot, or skip restore on the next boot |
 | 1 … 5 | Jump to Forge, Hush, Library, Afterglow, or Orbit |
 | Left / Right | Previous or next scene |
 | N | Next wallpaper |
@@ -213,7 +267,7 @@ bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl active status
 Copy or symlink it into a directory on your PATH if you want the shorter
 `bloomctl` command for keybindings or menu actions. Use `bloomctl active off`
 to pause Bloom's workspace atmospheres. The Signal rail provides the same
-active-state toggle.
+active-state toggle. This does not change SAVE/FRESH desktop-session behavior.
 
 ## Omarchy menu extension
 
@@ -233,9 +287,13 @@ models/                       Pure scene, agent, and wallpaper logic
 assets/wallpapers/default/    Bundled GPT Image 2.0 scene wallpapers
 scenes/                       Human-readable scene metadata
 schemas/                      Agent event schema
-scripts/                      CLI and event bridge helpers
-docs/OMARCHY_BLOOM_SPEC.md   Full product and technical specification
+scripts/bloom-session         Desktop-session restore entry point
+scripts/bloom-session-core    Session snapshot, matching, placement, and restore logic
+scripts/                      Other CLI and event bridge helpers
+docs/SESSION_RESTORE.md       Desktop-session restore contract and limitations
+docs/OMARCHY_BLOOM_SPEC.md    Full product and technical specification
 test/validate.py              Runtime-independent validation
+.github/workflows/ci.yml      PR and main-branch validation
 ~~~
 
 ## Development
@@ -246,14 +304,16 @@ The fastest local loop on an Omarchy machine is:
 git clone https://github.com/benclawbot/Bloom_Omarchy.git
 cd Bloom_Omarchy
 python3 test/validate.py
+python3 test/unit/session_restore_test.py
+node --test test/unit/models.test.js
 omarchy plugin add "$PWD" --enable --yes
 omarchy-shell shell rescanPlugins
 ~~~
 
-The current workspace used the official Quattro manifest and source contract,
-but it did not expose a live Wayland/Omarchy session. The QML code has not
-been claimed as live-rendered here; run it on an Omarchy Quattro machine for
-the compositor-level check.
+The same repository validator and unit tests run automatically in GitHub Actions
+for every pull request and every push to `main`. Compositor-level placement still
+needs an actual Hyprland/Omarchy session because CI does not provide the running
+desktop IPC surface.
 
 ## Launch video
 
