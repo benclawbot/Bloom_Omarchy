@@ -80,7 +80,7 @@ def test_launch_targets_saved_workspace_silently() -> None:
         "launch": {"desktopId": "org.example.Editor", "executable": ""},
     }
     with (
-        mock.patch.dict(SESSION.core, {"valid_desktop_id": lambda value: True}),
+        mock.patch.object(SESSION, "valid_desktop_id", return_value=True),
         mock.patch.object(SESSION.subprocess, "run") as run,
     ):
         assert SESSION.launch_target(target)

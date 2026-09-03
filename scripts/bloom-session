@@ -10,20 +10,21 @@ from __future__ import annotations
 
 import os
 import pathlib
-import runpy
 import shlex
 import subprocess
 import sys
 from typing import Any
 
 CORE = pathlib.Path(__file__).with_name("bloom-session-core")
-core = runpy.run_path(str(CORE), run_name="bloom_session_core")
+_runtime_name = __name__
 
-# Preserve the public surface of the original script for focused tests and any
-# local tooling that imports bloom-session rather than only invoking its CLI.
-for name, value in core.items():
-    if name not in {"__name__", "__file__", "__package__", "__loader__", "__spec__"}:
-        globals()[name] = value
+# Execute the existing manager in this module namespace so its functions retain
+# the same globals/mocking behavior as the original single-file implementation.
+# A temporary non-main name prevents the core's CLI footer from firing before
+# this shim installs the destination-aware launch override.
+globals()["__name__"] = "bloom_session_core"
+exec(compile(CORE.read_text(encoding="utf-8"), str(CORE), "exec"), globals(), globals())
+globals()["__name__"] = _runtime_name
 
 
 def launch_target(target: dict[str, Any]) -> bool:
@@ -32,7 +33,7 @@ def launch_target(target: dict[str, Any]) -> bool:
     executable = str(launch.get("executable", ""))
 
     command: list[str] = []
-    if core["valid_desktop_id"](desktop_id):
+    if valid_desktop_id(desktop_id):
         command = ["gtk-launch", desktop_id]
     else:
         path = pathlib.Path(executable)
@@ -67,11 +68,8 @@ def launch_target(target: dict[str, Any]) -> bool:
         return False
 
 
-# Functions created by runpy resolve their globals through this dictionary, so
-# replacing the launch function here changes only the app-spawn step. The core
-# still performs client matching and movetoworkspacesilent afterward as a
-# fallback for applications that fork or ignore Hyprland's one-shot exec rule.
-core["launch_target"] = launch_target
-
-if __name__ == "__main__":
-    raise SystemExit(core["main"](sys.argv))
+# restore_workspace resolves launch_target dynamically from this same globals
+# dictionary. Its existing client matcher and movetoworkspacesilent call remain
+# the fallback for applications that fork or ignore Hyprland's one-shot rule.
+if _runtime_name == "__main__":
+    raise SystemExit(main(sys.argv))
