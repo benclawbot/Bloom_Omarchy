@@ -206,7 +206,8 @@ Primary action: `Continue`.
 
 For a zero-conf install, the first canvas reveal is scheduled automatically
 after the plugin service is ready. This is a one-time discoverability moment,
-not a persistent startup preference; the latter remains opt-in under Startup.
+not a persistent startup preference. Bloom stays background-only at login and
+never summons its canvas without an explicit user action.
 
 ### Step 2: Motion
 
@@ -817,11 +818,10 @@ Example:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "defaultScene": "forge",
   "mode": "manual",
   "bloomActive": true,
-  "launchAtStartup": false,
   "motion": "gentle",
   "ambientIntensity": 0.65,
   "wallpapers": {
@@ -1019,7 +1019,6 @@ Required commands:
 | `focusAgent` | `{ "sessionId": "..." }` | Focuses verified session target |
 | `archiveAgent` | `{ "sessionId": "..." }` | Hides completed session |
 | `setMotion` | `{ "level": "still" | "gentle" | "alive" }` | Updates motion |
-| `startup` | `{ "value": "on" | "off" | "status" }` | Controls whether Bloom opens after Omarchy starts |
 
 IPC inputs are schema-validated. Unknown commands fail closed with an actionable diagnostic. Session IDs and scene IDs are data, never command fragments.
 
