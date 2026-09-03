@@ -22,7 +22,6 @@ Item {
   property string selectedAgentId: ""
   property bool focusPrimed: false
   property bool showWelcome: false
-  property double lastSceneClickAt: 0
 
   readonly property string moduleName: "org.bloom.omarchy"
   readonly property var currentScene: service && service.currentScene
@@ -81,9 +80,6 @@ Item {
   }
 
   function selectScene(id) {
-    var now = Date.now()
-    if (now - root.lastSceneClickAt < 220) return
-    root.lastSceneClickAt = now
     if (service) service.setScene(id)
     currentView = "scenes"
     keyCatcher.forceActiveFocus()
@@ -242,11 +238,6 @@ Item {
                     font.pixelSize: 19
                   }
 
-                  MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: if (service) service.toggleBloomActive()
-                  }
                 }
 
                 Column {
