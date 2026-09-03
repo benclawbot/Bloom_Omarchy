@@ -680,46 +680,6 @@ Item {
               }
 
               Rectangle {
-                id: centralActiveToggle
-                anchors.centerIn: parent
-                width: 236
-                height: 54
-                radius: 27
-                z: 8
-                color: service && service.bloomActive ? root.accent : "#182230"
-                border.width: 1
-                border.color: service && service.bloomActive
-                  ? Qt.lighter(root.accent, 1.16) : "#526074"
-
-                Row {
-                  anchors.centerIn: parent
-                  spacing: 10
-                  Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 12
-                    height: 12
-                    radius: 6
-                    color: service && service.bloomActive ? "#0C1119" : "#7D899B"
-                  }
-                  Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: service && service.bloomActive ? "BLOOM ACTIVE" : "ACTIVATE BLOOM"
-                    color: service && service.bloomActive ? "#0C1119" : "#E8EDF4"
-                    font.family: Style.font.family
-                    font.pixelSize: 11
-                    font.bold: true
-                    font.letterSpacing: 1.25
-                  }
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: if (service) service.toggleBloomActive()
-                }
-              }
-
-              Rectangle {
                 id: dividerRight
                 anchors.right: details.left
                 anchors.top: parent.top
@@ -1038,57 +998,6 @@ Item {
                   horizontalAlignment: Text.AlignHCenter
                   wrapMode: Text.WordWrap
                   lineHeight: 1.35
-                }
-
-                Rectangle {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  width: 310
-                  height: 58
-                  radius: 18
-                  color: service && service.bloomActive
-                    ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.12)
-                    : "#151D28"
-                  border.width: 1
-                  border.color: service && service.bloomActive
-                    ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.55)
-                    : "#354154"
-
-                  Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 18
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: service && service.bloomActive ? "WORKSPACE ATMOSPHERES ON" : "WORKSPACE ATMOSPHERES OFF"
-                    color: service && service.bloomActive ? root.accent : "#A4AFBF"
-                    font.family: Style.font.family
-                    font.pixelSize: 10
-                    font.bold: true
-                    font.letterSpacing: 0.8
-                  }
-
-                  Rectangle {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 14
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 46
-                    height: 26
-                    radius: 13
-                    color: service && service.bloomActive ? root.accent : "#303B4C"
-                    Rectangle {
-                      anchors.verticalCenter: parent.verticalCenter
-                      x: service && service.bloomActive ? parent.width - width - 3 : 3
-                      width: 20
-                      height: 20
-                      radius: 10
-                      color: service && service.bloomActive ? "#0C1119" : "#A8B2C0"
-                      Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                    }
-                  }
-
-                  MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: if (service) service.toggleBloomActive()
-                  }
                 }
 
                 Flow {
