@@ -5,7 +5,9 @@
 Bloom is a cinematic living-workspace plugin for Omarchy Quattro. It gives
 your desktop five intentional rooms — Forge, Hush, Library, Afterglow, and
 Orbit — then makes your local AI sessions visible as a calm, navigable Agent
-Constellation.
+Constellation. Bloom also saves your display configuration across all five
+desktops, restoring each workspace's scene, wallpaper, and atmosphere as you
+move between them.
 
 The point is not another dashboard. The point is a desktop that changes its
 posture with you.
