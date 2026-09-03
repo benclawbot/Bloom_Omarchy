@@ -74,6 +74,25 @@ def test_restore_finishes_first_workspace_before_next() -> None:
     assert restored == [3, 5]
 
 
+def test_launch_targets_saved_workspace_silently() -> None:
+    target = {
+        "workspace": 4,
+        "launch": {"desktopId": "org.example.Editor", "executable": ""},
+    }
+    with (
+        mock.patch.object(SESSION, "valid_desktop_id", return_value=True),
+        mock.patch.object(SESSION.subprocess, "run") as run,
+    ):
+        assert SESSION.launch_target(target)
+    run.assert_called_once()
+    assert run.call_args.args[0] == [
+        "hyprctl",
+        "dispatch",
+        "exec",
+        "[workspace 4 silent] gtk-launch org.example.Editor",
+    ]
+
+
 def test_unavailable_ipc_preserves_snapshot() -> None:
     with (
         mock.patch.object(SESSION, "restore_enabled", return_value=True),
@@ -94,5 +113,6 @@ if __name__ == "__main__":
     test_saved_geometry_is_normalized()
     test_snapshot_replaces_closed_apps_with_current_window_set()
     test_restore_finishes_first_workspace_before_next()
+    test_launch_targets_saved_workspace_silently()
     test_unavailable_ipc_preserves_snapshot()
     print("Bloom session restore checks passed")
