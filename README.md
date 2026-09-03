@@ -89,8 +89,8 @@ omarchy plugin update org.bloom.omarchy --yes
 
 `--enable` enables the plugin and Bloom starts shaping workspaces immediately.
 The manifest declares the right bar section, where Bloom appears with a visible
-ON/OFF control. Click the ✦ glyph to open the canvas; its large central button
-also activates or pauses Bloom. No terminal command is part of normal use. On
+ON/OFF control. Click the ✦ glyph to open the canvas; the activation toggle
+lives in the right-hand Signal panel. No terminal command is part of normal use. On
 a genuinely fresh install, Bloom reveals the canvas once automatically so the
 feature is discoverable; that one-time reveal does not enable future startup
 launches. After that, click the glyph whenever you want to open Bloom. If you are
@@ -119,7 +119,7 @@ process/file APIs described below.
 Enabling the plugin loads Bloom's lightweight service with omarchy-shell and
 turns workspace atmospheres on by default. After the first-run reveal, the
 full canvas stays out of the way until you click the Bloom bar glyph. The
-large control in the center of the Scenes screen toggles Bloom on and off.
+right-hand Signal panel contains the single Bloom Active toggle.
 
 For troubleshooting only, the equivalent direct shell command is:
 
@@ -132,23 +132,21 @@ modal by itself; click the bar glyph when you want the canvas. The preference
 is stored in `XDG_CONFIG_HOME/omarchy-bloom/config.json`; Bloom does not create
 a second startup process or modify your compositor configuration.
 
-Bloom scopes atmosphere to the focused Hyprland workspace. Selecting a scene
-or wallpaper while you are on workspace 2 changes only workspace 2's saved
-assignment; switching away and back restores that workspace's image. Omarchy's
-stock background setter is intentionally not used for Bloom workspace choices,
-because it owns one global background symlink. Bloom instead starts `swaybg`
-directly with the focused workspace's saved image and leaves Omarchy's global
-background preference untouched.
+Bloom also scopes atmosphere to the focused Hyprland workspace. Selecting a
+scene or wallpaper while you are on workspace 2 changes workspace 2's
+assignment; switching to workspace 1–5 restores that workspace's saved
+assignment. The desktop wallpaper is committed through Omarchy's own
+background setter, so it remains after Bloom closes.
 
 ## Controls
 
 | Key / action | Result |
 | --- | --- |
 | Click Bloom glyph | Open or close the Bloom canvas |
-| SAVE / FRESH | Restore the last desktop setup on next boot, or start fresh |
+| Bloom Active toggle | Pause or resume workspace atmospheres |
 | 1 … 5 | Jump to Forge, Hush, Library, Afterglow, or Orbit |
 | Left / Right | Previous or next scene |
-| N | Next wallpaper for the current workspace |
+| N | Next wallpaper |
 | A | Agent Constellation view |
 | W | Wallpaper view |
 | S | Scenes view |
@@ -156,7 +154,7 @@ background preference untouched.
 | Up / Down | Select an agent |
 | Enter | Focus the selected live agent window |
 | Esc | Close Bloom |
-| Right-click glyph | Next wallpaper for the current workspace |
+| Right-click glyph | Next wallpaper |
 | Middle-click glyph | Next scene |
 | Demo pill | Populate a reviewable constellation |
 
@@ -176,20 +174,9 @@ XDG_CONFIG_HOME/omarchy-bloom/wallpapers/forge/
 XDG_CONFIG_HOME/omarchy-bloom/wallpapers/orbit/
 ~~~
 
-Bloom accepts png, jpg, jpeg, webp, and avif. A wallpaper inside a scene folder
-is preferred for that scene; a wallpaper at the root is treated as a neutral
-fallback. Open Bloom's Wallpapers view and cycle/select from the local library
-while focused on the workspace you want to customize. That choice is stored on
-the workspace itself, so using the same scene on another workspace does not
-inherit or overwrite it.
-
-The helper `scripts/bloom-workspace-bg` validates the selected file and changes
-the live `swaybg` image without changing Omarchy's `current/background`
-symlink. On a single-monitor setup this gives each workspace its own remembered
-wallpaper as you switch between them. Because `swaybg` is monitor-scoped rather
-than Hyprland-workspace-scoped, a multi-monitor desktop cannot show independent
-wallpapers for two simultaneously visible workspaces with one global swaybg
-process; Bloom still preserves and restores each workspace's own saved choice.
+Bloom accepts png, jpg, jpeg, webp, and avif. A wallpaper inside a
+scene folder is preferred for that scene; a wallpaper at the root is treated
+as a neutral fallback.
 
 ## Agent events
 
@@ -222,9 +209,9 @@ bash ~/.config/omarchy/plugins/org.bloom.omarchy/scripts/bloomctl startup status
 ~~~
 
 Copy or symlink it into a directory on your PATH if you want the shorter
-`bloomctl` command for keybindings or menu actions. Use `bloomctl startup off`
-to disable the automatic canvas launch, or `bloomctl active off` to pause
-Bloom's workspace atmospheres. The Signal rail shows the same two toggles.
+`bloomctl` command for keybindings or menu actions. Use `bloomctl startup off` to disable the
+automatic canvas launch, or `bloomctl active off` to pause Bloom's
+workspace atmospheres. The Signal rail shows the same two toggles.
 
 ## Omarchy menu extension
 
@@ -244,7 +231,7 @@ models/                       Pure scene, agent, and wallpaper logic
 assets/wallpapers/default/    Bundled GPT Image 2.0 scene wallpapers
 scenes/                       Human-readable scene metadata
 schemas/                      Agent event schema
-scripts/                      Session, wallpaper, CLI, and event helpers
+scripts/                      CLI and event bridge helpers
 docs/OMARCHY_BLOOM_SPEC.md   Full product and technical specification
 test/validate.py              Runtime-independent validation
 ~~~
